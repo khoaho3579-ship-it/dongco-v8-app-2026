@@ -1,0 +1,1408 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>Động cơ V8 5.7L</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&family=Roboto+Mono:wght@400;500&display=swap">
+<style>
+/* Bố cục: thanh ứng dụng trên cùng, sân khấu 3D chiếm phần còn lại, bottom sheet M3 có 4 tab. Tông màu: cam nâu (hạt giống hue 28) */
+:root{
+  --surface:#FFF8F5;--sc-low:#FFF1EA;--sc:#F9EBE3;--sc-high:#F3E5DC;--sc-highest:#EDDFD6;
+  --on-surface:#201A16;--on-surface-v:#52443B;--outline:#85736A;--outline-v:#D8C2B7;
+  --primary:#964900;--on-primary:#FFFFFF;--primary-c:#FFDCC5;--on-primary-c:#311300;
+  --secondary:#755846;--secondary-c:#FDDCC9;--on-secondary-c:#2B170A;
+  --tertiary:#646032;--tertiary-c:#ECE5AB;--on-tertiary-c:#1F1C00;
+  --error:#BA1A1A;--ok:#2E7D32;--stage-a:#F6E8DE;--stage-b:#E4D2C5;
+  --intake:#1E6FB8;--exhaust:#C2410C;--font:'Roboto',system-ui,sans-serif;--mono:'Roboto Mono',ui-monospace,monospace;
+  --sheet-h:44vh;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --surface:#17120F;--sc-low:#1F1A16;--sc:#241E1A;--sc-high:#2F2924;--sc-highest:#3A332E;
+  --on-surface:#ECE0D9;--on-surface-v:#D8C2B7;--outline:#A08D83;--outline-v:#52443B;
+  --primary:#FFB68A;--on-primary:#512400;--primary-c:#733500;--on-primary-c:#FFDCC5;
+  --secondary:#E5BFA8;--secondary-c:#5B4130;--on-secondary-c:#FDDCC9;
+  --tertiary:#CFC991;--tertiary-c:#4B4818;--on-tertiary-c:#ECE5AB;
+  --error:#FFB4AB;--ok:#7BD27F;--stage-a:#2B211B;--stage-b:#120D0A;--intake:#7CB8F5;--exhaust:#FF9A62;color-scheme:dark}}
+:root[data-theme="dark"]{
+  --surface:#17120F;--sc-low:#1F1A16;--sc:#241E1A;--sc-high:#2F2924;--sc-highest:#3A332E;
+  --on-surface:#ECE0D9;--on-surface-v:#D8C2B7;--outline:#A08D83;--outline-v:#52443B;
+  --primary:#FFB68A;--on-primary:#512400;--primary-c:#733500;--on-primary-c:#FFDCC5;
+  --secondary:#E5BFA8;--secondary-c:#5B4130;--on-secondary-c:#FDDCC9;
+  --tertiary:#CFC991;--tertiary-c:#4B4818;--on-tertiary-c:#ECE5AB;
+  --error:#FFB4AB;--ok:#7BD27F;--stage-a:#2B211B;--stage-b:#120D0A;--intake:#7CB8F5;--exhaust:#FF9A62;color-scheme:dark}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{height:100%}
+body{margin:0;background:var(--surface);color:var(--on-surface);font-family:var(--font);font-size:14px;line-height:1.4;overflow:hidden;
+  touch-action:none}
+#app{height:100%;display:flex;flex-direction:column}
+.appbar{display:flex;align-items:center;gap:4px;height:56px;padding:0 4px 0 max(16px,env(safe-area-inset-left,0px));background:var(--sc-low);flex:none}
+.appbar h1{margin:0;font-size:20px;font-weight:500;letter-spacing:0;line-height:1.1}
+.appbar small{display:block;color:var(--on-surface-v);font-size:12px;letter-spacing:.2px}
+.appbar .ttl{flex:1;min-width:0}
+.ib{width:48px;height:48px;border:0;border-radius:24px;background:transparent;color:var(--on-surface-v);display:grid;place-items:center;cursor:pointer}
+.ib:active{background:color-mix(in srgb,var(--on-surface) 12%,transparent)}
+.ib[aria-pressed="true"]{background:var(--secondary-c);color:var(--on-secondary-c)}
+.ib svg{width:24px;height:24px;fill:currentColor}
+#stage{position:relative;flex:1;min-height:0;background:radial-gradient(120% 90% at 50% 35%,var(--stage-a),var(--stage-b));overflow:hidden}
+#gl{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none}
+.hud{position:absolute;left:max(12px,env(safe-area-inset-left,0px));top:12px;display:flex;gap:8px;pointer-events:none}
+.stat{background:color-mix(in srgb,var(--sc-high) 88%,transparent);border-radius:16px;padding:8px 14px;min-width:92px;backdrop-filter:blur(6px)}
+.stat b{display:block;font:500 24px/1.1 var(--mono);font-variant-numeric:tabular-nums;color:var(--on-surface)}
+.stat span{font-size:11px;color:var(--on-surface-v);letter-spacing:.6px;text-transform:uppercase}
+.stat.warn b{color:var(--error)}
+.cams{position:absolute;right:max(12px,env(safe-area-inset-right,0px));top:12px;display:flex;flex-direction:column;gap:8px}
+.fab{width:44px;height:44px;border-radius:14px;border:0;background:var(--primary-c);color:var(--on-primary-c);font:500 12px var(--font);cursor:pointer;box-shadow:0 1px 3px rgb(0 0 0/.25)}
+.fab:active{filter:brightness(.92)}
+#pick{position:absolute;left:max(12px,env(safe-area-inset-left,0px));right:max(12px,env(safe-area-inset-right,0px));bottom:12px;background:var(--sc-high);border-radius:20px;padding:12px 16px;display:none;box-shadow:0 2px 8px rgb(0 0 0/.3)}
+#pick.on{display:block}
+#pick h3{margin:0 0 2px;font-size:16px;font-weight:500}
+#pick p{margin:0;color:var(--on-surface-v);font-size:13px}
+#pick .x{position:absolute;right:4px;top:4px}
+#sheet{flex:none;height:var(--sheet-h);background:var(--sc);border-radius:28px 28px 0 0;display:flex;flex-direction:column;box-shadow:0 -2px 12px rgb(0 0 0/.18);transition:height .25s cubic-bezier(.2,0,0,1)}
+#sheet.min{height:118px}
+#sheet.max{height:72vh}
+.grab{height:28px;display:grid;place-items:center;cursor:ns-resize;flex:none;touch-action:none}
+.grab i{width:32px;height:4px;border-radius:2px;background:var(--outline)}
+.tabs{display:flex;flex:none;border-bottom:1px solid var(--outline-v);padding:0 max(8px,env(safe-area-inset-left,0px))}
+.tab{flex:1;height:44px;border:0;background:none;color:var(--on-surface-v);font:500 13px var(--font);position:relative;cursor:pointer}
+.tab[aria-selected="true"]{color:var(--primary)}
+.tab[aria-selected="true"]::after{content:"";position:absolute;left:20%;right:20%;bottom:0;height:3px;border-radius:3px 3px 0 0;background:var(--primary)}
+.panel{flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;padding:14px max(16px,env(safe-area-inset-left,0px)) 24px max(16px,env(safe-area-inset-left,0px));touch-action:pan-y;display:none}
+.panel.on{display:block}
+.row{display:flex;align-items:center;gap:12px;margin-bottom:14px;min-width:0}
+.row>label{flex:none;width:92px;font-size:13px;color:var(--on-surface-v)}
+.row .val{flex:none;width:58px;text-align:right;font:500 13px var(--mono);font-variant-numeric:tabular-nums}
+input[type=range]{-webkit-appearance:none;appearance:none;flex:1;min-width:0;height:44px;background:transparent;margin:0;touch-action:pan-y}
+input[type=range]::-webkit-slider-runnable-track{height:16px;border-radius:8px;background:linear-gradient(to right,var(--primary) var(--v,0%),var(--secondary-c) var(--v,0%))}
+input[type=range]::-moz-range-track{height:16px;border-radius:8px;background:var(--secondary-c)}
+input[type=range]::-moz-range-progress{height:16px;border-radius:8px;background:var(--primary)}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:4px;height:44px;margin-top:-14px;border-radius:2px;background:var(--primary);box-shadow:0 0 0 4px var(--sc)}
+input[type=range]::-moz-range-thumb{width:4px;height:44px;border:0;border-radius:2px;background:var(--primary)}
+.btn{height:48px;padding:0 24px;border-radius:24px;border:0;font:500 14px var(--font);cursor:pointer;letter-spacing:.1px}
+.btn.f{background:var(--primary);color:var(--on-primary)}
+.btn.t{background:var(--secondary-c);color:var(--on-secondary-c)}
+.btn:active{filter:brightness(.93)}
+.btn[disabled]{opacity:.38}
+.btns{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px}
+.sw{display:flex;align-items:center;justify-content:space-between;min-height:48px;gap:12px}
+.sw span{font-size:14px}
+.sw input{appearance:none;-webkit-appearance:none;width:52px;height:32px;border-radius:16px;background:var(--sc-highest);border:2px solid var(--outline);position:relative;cursor:pointer;flex:none;transition:background .2s}
+.sw input::after{content:"";position:absolute;left:6px;top:6px;width:16px;height:16px;border-radius:50%;background:var(--outline);transition:all .2s}
+.sw input:checked{background:var(--primary);border-color:var(--primary)}
+.sw input:checked::after{left:24px;top:2px;width:24px;height:24px;background:var(--on-primary)}
+.seg{display:flex;border:1px solid var(--outline);border-radius:20px;overflow:hidden;margin-bottom:14px}
+.seg button{flex:1;height:40px;border:0;background:none;color:var(--on-surface);font:500 13px var(--font);cursor:pointer;border-right:1px solid var(--outline)}
+.seg button:last-child{border-right:0}
+.seg button[aria-pressed="true"]{background:var(--secondary-c);color:var(--on-secondary-c)}
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px}
+.chip{height:36px;padding:0 14px;border-radius:8px;border:1px solid var(--outline);background:none;color:var(--on-surface-v);font:500 13px var(--font);cursor:pointer}
+.chip[aria-pressed="true"]{background:var(--secondary-c);color:var(--on-secondary-c);border-color:transparent}
+.chip .dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:8px;vertical-align:-1px;box-shadow:0 0 0 1px color-mix(in srgb,var(--on-surface) 25%,transparent)}
+.start{position:absolute;left:max(12px,env(safe-area-inset-left,0px));top:86px;height:48px;padding:0 20px;border:0;border-radius:16px;background:var(--primary);color:var(--on-primary);font:500 14px var(--font);cursor:pointer;box-shadow:0 2px 6px rgb(0 0 0/.35)}
+.start:active{filter:brightness(.92)}
+.leg{display:flex;flex-wrap:wrap;gap:6px 14px;margin:2px 0 12px;font-size:12px;color:var(--on-surface-v)}
+.leg span{display:inline-flex;align-items:center;gap:6px}
+.leg i{width:10px;height:10px;border-radius:50%;display:inline-block}
+.h{font-size:12px;letter-spacing:.8px;text-transform:uppercase;color:var(--on-surface-v);margin:6px 0 10px}
+canvas.ch{width:100%;height:150px;display:block;background:var(--sc-low);border-radius:16px;margin-bottom:6px}
+.cap{font-size:12px;color:var(--on-surface-v);margin:0 0 14px}
+table.sp{width:100%;border-collapse:collapse;margin-bottom:16px}
+table.sp td{padding:9px 0;border-bottom:1px solid var(--outline-v);font-size:13px;vertical-align:top}
+table.sp td:first-child{color:var(--on-surface-v);width:46%;padding-right:10px}
+table.sp td:last-child{font-family:var(--mono);font-size:12.5px;font-variant-numeric:tabular-nums}
+.gauges{display:grid;grid-template-columns:repeat(auto-fit,minmax(104px,1fr));gap:8px;margin-bottom:16px}
+.g{background:var(--sc-high);border-radius:16px;padding:10px 12px;min-width:0}
+.g b{display:block;font:500 18px var(--mono);font-variant-numeric:tabular-nums}
+.g span{font-size:11px;color:var(--on-surface-v)}
+.g.alert b{color:var(--error)}
+.fo{display:flex;gap:6px;margin-bottom:14px;flex-wrap:wrap}
+.fo i{flex:1 0 34px;height:34px;border-radius:10px;background:var(--sc-high);display:grid;place-items:center;font:500 13px var(--mono);font-style:normal;color:var(--on-surface-v)}
+.fo i.on{background:var(--exhaust);color:#fff}
+
+/* Tối ưu bố cục cho điện thoại nhỏ và chế độ ngang */
+@media (max-width:420px){
+  .appbar{height:52px}.appbar h1{font-size:18px}.appbar small{font-size:11px}
+  .hud{gap:6px;top:8px;left:8px}.stat{min-width:76px;padding:7px 10px;border-radius:13px}
+  .stat b{font-size:20px}.stat span{font-size:10px}
+  .cams{right:8px;top:8px;gap:6px}.fab{width:40px;height:40px;border-radius:12px}
+  .start{top:66px;left:8px;height:42px;padding:0 15px}
+  #sheet{--sheet-h:46vh}.panel{padding-left:12px;padding-right:12px}
+  .row>label{width:82px}.btn{padding:0 18px}
+}
+@media (orientation:landscape) and (max-height:520px){
+  .appbar{height:44px;padding-left:max(12px,env(safe-area-inset-left,0px))}
+  .appbar h1{font-size:17px}.appbar small{font-size:10px}
+  #sheet{height:48vh;border-radius:20px 20px 0 0}
+  #sheet.max{height:88vh}#sheet.min{height:66px}
+  .grab{height:18px}.tabs{padding-left:8px;padding-right:8px}
+  .tab{height:36px;font-size:12px}.panel{padding-top:9px;padding-bottom:14px}
+  .row{margin-bottom:7px}.sw{min-height:38px}
+  .hud{top:8px}.cams{top:8px;flex-direction:row;right:8px}
+  .fab{width:38px;height:38px}.start{top:56px;height:40px}
+}
+@media (prefers-reduced-motion:reduce){#sheet{transition:none}}
+
+</style>
+<div id="app">
+  <header class="appbar">
+    <div class="ttl"><h1>V8 Small-block 5.7L</h1><small id="sub">Tắt máy · 0 vòng/phút</small></div>
+    <button class="ib" id="bSound" aria-pressed="false" aria-label="Âm thanh"><svg viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3A4.5 4.5 0 0 0 14 8v8a4.5 4.5 0 0 0 2.5-4zM14 3.2v2.1a7 7 0 0 1 0 13.4v2.1a9 9 0 0 0 0-17.6z"/></svg></button>
+    <button class="ib" id="bAuto" aria-pressed="false" aria-label="Tự xoay"><svg viewBox="0 0 24 24"><path d="M12 6V3L8 7l4 4V8a4 4 0 0 1 3.5 6l1.5 1.5A6 6 0 0 0 12 6zm-3.5 3.5L7 8A6 6 0 0 0 12 18v3l4-4-4-4v3a4 4 0 0 1-3.5-6.5z"/></svg></button>
+  </header>
+  <main id="stage">
+    <canvas id="gl"></canvas>
+    <div class="hud">
+      <div class="stat" id="stRpm"><b id="hRpm">0</b><span>vòng/phút</span></div>
+      <div class="stat"><b id="hKw">0</b><span>kW công suất</span></div>
+    </div>
+    <button class="start" id="bFab">Đề máy</button>
+    <div class="cams">
+      <button class="fab" data-cam="iso">3D</button>
+      <button class="fab" data-cam="front">Trước</button>
+      <button class="fab" data-cam="side">Bên</button>
+      <button class="fab" data-cam="top">Trên</button>
+    </div>
+    <div id="pick"><button class="ib x" id="pickX" aria-label="Đóng"><svg viewBox="0 0 24 24"><path d="M19 6.4 17.6 5 12 10.6 6.4 5 5 6.4 10.6 12 5 17.6 6.4 19 12 13.4 17.6 19 19 17.6 13.4 12z"/></svg></button><h3 id="pickT"></h3><p id="pickD"></p></div>
+  </main>
+  <section id="sheet">
+    <div class="grab" id="grab"><i></i></div>
+    <div class="tabs" role="tablist">
+      <button class="tab" role="tab" aria-selected="true" data-p="pCtl">Điều khiển</button>
+      <button class="tab" role="tab" aria-selected="false" data-p="pView">Hiển thị</button>
+      <button class="tab" role="tab" aria-selected="false" data-p="pChart">Đồ thị</button>
+      <button class="tab" role="tab" aria-selected="false" data-p="pSpec">Thông số</button>
+    </div>
+    <div class="panel on" id="pCtl">
+      <div class="btns">
+        <button class="btn f" id="bStart">Đề máy</button>
+        <button class="btn t" id="bIgn" aria-pressed="false">Bật điện</button>
+      </div>
+      <div class="row"><label for="rThr">Bướm ga</label><input type="range" id="rThr" min="0" max="100" value="0"><span class="val" id="vThr">0%</span></div>
+      <div class="row"><label for="rLoad">Tải phanh</label><input type="range" id="rLoad" min="0" max="100" value="0"><span class="val" id="vLoad">0%</span></div>
+      <div class="h">Tốc độ mô phỏng</div>
+      <div class="seg" id="segTime">
+        <button data-t="0.01">1/100</button><button data-t="0.03">1/30</button><button data-t="0.1" aria-pressed="true">1/10</button><button data-t="0.3">1/3</button><button data-t="1">1×</button>
+      </div>
+      <div class="h">Thứ tự nổ 1-8-4-3-6-5-7-2</div>
+      <div class="fo" id="fo"></div>
+      <p class="cap">Bật điện rồi nhấn Đề máy. Máy tự giữ cầm chừng ~800 vòng/phút. Tăng ga để lên vòng tua, tăng tải phanh để xem mô-men thay đổi. Mô hình nhiệt và khí xả là giá trị ước lượng phục vụ học tập.</p>
+    </div>
+    <div class="panel" id="pView">
+      <div class="h">Chế độ xem</div>
+      <div class="seg" id="segView"><button data-v="core" aria-pressed="true">Bên trong</button><button data-v="valve">Cam, xupap</button><button data-v="crank">Khuỷu, piston</button><button data-v="all">Toàn bộ</button></div>
+      <div class="h">Cụm chi tiết</div>
+      <div class="chips" id="chips"></div>
+      <div class="row"><label for="rEx">Tách rời</label><input type="range" id="rEx" min="0" max="100" value="0"><span class="val" id="vEx">0%</span></div>
+      <div class="row"><label for="rCut">Mặt cắt</label><input type="range" id="rCut" min="0" max="100" value="0"><span class="val" id="vCut">Tắt</span></div>
+      <div class="row"><label for="rAlpha">Độ trong</label><input type="range" id="rAlpha" min="5" max="100" value="14"><span class="val" id="vAlpha">14%</span></div>
+      <label class="sw"><span>Tô màu khí trong xi-lanh</span><input type="checkbox" id="swGas" checked></label>
+      <label class="sw"><span>Hiển thị tia lửa và cháy</span><input type="checkbox" id="swFlame" checked></label>
+      <div class="h">Hiệu ứng</div>
+      <label class="sw"><span>Phun xăng và khí nạp</span><input type="checkbox" id="swFuel" checked></label>
+      <label class="sw"><span>Khí xả và khói</span><input type="checkbox" id="swSmoke" checked></label>
+      <label class="sw"><span>Độ nhám bề mặt</span><input type="checkbox" id="swGrain" checked></label>
+      <div class="row"><label for="rDens">Mật độ hạt</label><input type="range" id="rDens" min="20" max="150" value="70"><span class="val" id="vDens">70%</span></div>
+      <div class="leg"><span><i style="background:#5aa8ff"></i>Khí nạp</span><span><i style="background:#ffd24a"></i>Xăng phun</span><span><i style="background:#ff8a2a"></i>Lửa, tia lửa</span><span><i style="background:#ff5a2a"></i>Khí xả nóng</span><span><i style="background:#9aa3ad"></i>Khói</span></div>
+      <p class="cap">Chạm vào một chi tiết trên mô hình để xem tên và chức năng.</p>
+    </div>
+    <div class="panel" id="pChart">
+      <div class="chips" id="cylChips"></div>
+      <div class="h">Đồ thị P–V (áp suất theo thể tích)</div>
+      <canvas class="ch" id="cPV"></canvas><p class="cap" id="capPV"></p>
+      <div class="h">Mô-men khí cháy theo góc trục khuỷu</div>
+      <canvas class="ch" id="cTq"></canvas><p class="cap">Tổng 8 xi-lanh trong 720°. Chấm là vị trí hiện tại.</p>
+      <div class="h">Pha phân phối khí</div>
+      <canvas class="ch" id="cVal"></canvas><p class="cap">Xanh: nạp mở 350°–590°. Cam: xả mở 145°–365°. Pha 0° là ĐCT đầu kỳ nổ.</p>
+    </div>
+    <div class="panel" id="pSpec">
+      <div class="gauges">
+        <div class="g"><b id="gTq">0</b><span>Mô-men N·m</span></div>
+        <div class="g"><b id="gHp">0</b><span>Công suất hp</span></div>
+        <div class="g"><b id="gMap">0</b><span>MAP kPa</span></div>
+        <div class="g"><b id="gTemp">25</b><span>Nước °C</span></div>
+        <div class="g"><b id="gOil">0</b><span>Dầu bar</span></div>
+        <div class="g"><b id="gEgt">25</b><span>Khí xả °C*</span></div>
+        <div class="g"><b id="gThr">0</b><span>Bướm ga hiệu dụng %</span></div>
+        <div class="g"><b id="gVp">0</b><span>Tốc độ piston m/s</span></div>
+        <div class="g"><b id="gAdv">0</b><span>Đánh lửa sớm °</span></div>
+        <div class="g"><b id="gAng">0</b><span>Góc khuỷu °</span></div>
+      </div>
+      <table class="sp">
+        <tr><td>Kiểu động cơ</td><td>V8 90°, OHV 2 xupap/xi-lanh</td></tr>
+        <tr><td>Dung tích</td><td>5.7 L (350 cu in)</td></tr>
+        <tr><td>Đường kính × hành trình</td><td>101.6 × 88.4 mm</td></tr>
+        <tr><td>Chiều dài thanh truyền</td><td>144.8 mm (5.7 in)</td></tr>
+        <tr><td>Tỷ số nén</td><td>10.0 : 1</td></tr>
+        <tr><td>Trục khuỷu</td><td>Cross-plane, 4 chốt lệch 90°, 5 cổ trục</td></tr>
+        <tr><td>Thứ tự nổ</td><td>1-8-4-3-6-5-7-2</td></tr>
+        <tr><td>Trục cam</td><td>1 trục giữa khối, xích dẫn tỷ số 2:1</td></tr>
+        <tr><td>Hành trình xupap</td><td>12.7 mm, tỷ số cò mổ 1.5</td></tr>
+        <tr><td>Pha cam nạp</td><td>mở 350° · đóng 590° (ABDC 50°)</td></tr>
+        <tr><td>Pha cam xả</td><td>mở 145° · đóng 365° (BBDC 35°)</td></tr>
+        <tr><td>Mô hình khí</td><td>Nén đa biến n = 1.32, cháy Wiebe</td></tr>
+        <tr><td>Ghi chú mô phỏng</td><td>Giá trị nhiệt, ma sát và công suất là xấp xỉ giáo dục</td></tr>
+      </table>
+    </div>
+  </section>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+/* ================= LÕI VẬT LÝ (đơn vị SI) =================
+   Động cơ V8 small-block 5.7 L, trục khuỷu cross-plane 90°.
+   Thứ tự nổ 1-8-4-3-6-5-7-2. Mô phỏng:
+   - động học tay quay-con trượt (s, ds/dψ, d²s/dψ²) cho từng xi-lanh
+   - áp suất khí: nạp / nén đa biến / cháy Wiebe / giãn nở / xả
+   - phương trình chuyển động Lagrange với quán tính thay đổi của cụm piston
+   - ma sát, tải phanh, mô-tơ đề, điều khiển cầm chừng, giới hạn vòng tua */
+const TAU = Math.PI * 2, D2R = Math.PI / 180, R2D = 180 / Math.PI;
+const PH = {
+  r: 0.0442, L: 0.1448, bore: 0.1016, CR: 10.0, n: 1.32,
+  Pcase: 1.0e5, mRec: 0.66, J: 0.23, kBurn: 4.0, burnDur: 44,
+  liftV: 0.0127, rocker: 1.5, IVO: 350, IVC: 590, EVO: 145, EVC: 365
+};
+PH.A = Math.PI / 4 * PH.bore * PH.bore;
+PH.Vs = PH.A * 2 * PH.r;
+PH.Vc = PH.Vs / (PH.CR - 1);
+PH.sTop = PH.r + PH.L;
+PH.r2 = PH.r * PH.r; PH.L2 = PH.L * PH.L;
+
+/* bank: -1 = dãy trái (lẻ), +1 = dãy phải (chẵn); alpha = bank*45°.
+   fire = góc trục khuỷu (độ) tại thời điểm nổ; theta = góc chốt khuỷu (độ, theo chiều kim đồng hồ từ hướng lên). */
+const CYL = [
+  { n: 1, bank: -1, pos: 0, fire: 0,   theta: 315 },
+  { n: 2, bank:  1, pos: 0, fire: 630, theta: 315 },
+  { n: 3, bank: -1, pos: 1, fire: 270, theta: 225 },
+  { n: 4, bank:  1, pos: 1, fire: 180, theta: 225 },
+  { n: 5, bank: -1, pos: 2, fire: 450, theta: 45 },
+  { n: 6, bank:  1, pos: 2, fire: 360, theta: 45 },
+  { n: 7, bank: -1, pos: 3, fire: 540, theta: 135 },
+  { n: 8, bank:  1, pos: 3, fire: 90,  theta: 135 }
+];
+CYL.forEach(c => { c.alpha = c.bank * 45; });
+
+const S = {
+  psi: 0, w: 0, rpm: 0,
+  ignSwitch: false, starter: false, thr: 0.0, load: 0, isc: 0.04,
+  fuelCut: false, map: 0.95e5, tauOut: 0, tauG: 0, tauF: 0, power: 0,
+  coolant: 25, oilP: 0, timeScale: 0.1, running: false, adv: 12
+};
+const ENV = { ign: false, map: 1e5, pexh: 1.05e5, ve: .9, adv: 12, dur: PH.burnDur, pivc: 0, Pevo: 0, rpm: 0 };
+
+/* hình học phụ thuộc pha (độ, 0..720, 0 = ĐCT đầu kỳ nổ) */
+function sOfPhase(phDeg) {
+  const d = phDeg * D2R, sd = Math.sin(d);
+  return PH.r * Math.cos(d) + Math.sqrt(PH.L2 - PH.r2 * sd * sd);
+}
+function volOfPhase(phDeg) { return PH.Vc + PH.A * (PH.sTop - sOfPhase(phDeg)); }
+
+/* trả về s, ds/dψ, d²s/dψ² cho pha ph (rad) */
+function kin(phRad, out) {
+  const d = -phRad, sd = Math.sin(d), cd = Math.cos(d);
+  const q = Math.sqrt(PH.L2 - PH.r2 * sd * sd);
+  out.s = PH.r * cd + q;
+  out.sp = PH.r * sd * (1 + PH.r * cd / q);
+  const c2 = cd * cd - sd * sd;
+  out.spp = -(PH.r * cd + PH.r2 * (c2 / q + PH.r2 * sd * sd * cd * cd / (q * q * q)));
+  return out;
+}
+
+function smooth01(x) { x = x < 0 ? 0 : x > 1 ? 1 : x; return x * x * (3 - 2 * x); }
+
+function updateEnv() {
+  const rpm = Math.max(S.rpm, 0);
+  ENV.rpm = rpm;
+  ENV.map = S.map;
+  ENV.ve = Math.max(0.62, 0.94 - 0.00002 * Math.abs(rpm - 3800));
+  ENV.pexh = 1.05e5 * (1 + 0.045 * rpm / 1000);
+  ENV.adv = Math.min(38, 8 + rpm * 0.0035);
+  S.adv = ENV.adv;
+  ENV.dur = PH.burnDur;
+  const Vivc = volOfPhase(PH.IVC), Vevo = volOfPhase(PH.EVO);
+  ENV.Vivc = Vivc;
+  ENV.pivc = ENV.map * ENV.ve;
+  /* hiệu suất cháy giảm khi vòng tua thấp / tiết lưu kín (hòa khí loãng, cháy chậm, tổn thất nhiệt) */
+  ENV.k = PH.kBurn * (0.55 + 0.45 * smooth01(rpm / 2500)) * (0.6 + 0.4 * smooth01((ENV.map - 0.3e5) / 0.6e5));
+  const burned = ENV.ign ? (1 + ENV.k) : 1;
+  ENV.Pevo = ENV.pivc * Math.pow(Vivc / Vevo, PH.n) * burned;
+}
+
+/* phần trăm nhiên liệu đã cháy (Wiebe) */
+function burnFrac(ph) {
+  if (!ENV.ign) return 0;
+  const phS = 720 - ENV.adv;
+  let u;
+  if (ph >= PH.IVC) u = ph >= phS ? (ph - phS) / ENV.dur : -1;
+  else if (ph < PH.EVO) u = (ph + ENV.adv) / ENV.dur;
+  else return 0;
+  if (u < 0) return 0;
+  return u >= 1 ? 1 : 1 - Math.exp(-5 * u * u * u);
+}
+
+/* áp suất trong xi-lanh (Pa) theo pha và thể tích */
+function gasP(ph, V) {
+  if (ph >= PH.IVC || ph < PH.EVO) {
+    const Pb = ENV.pivc * Math.pow(ENV.Vivc / V, PH.n);
+    return Pb * (1 + ENV.k * burnFrac(ph));
+  }
+  if (ph < PH.IVO) {
+    return ENV.pexh + (ENV.Pevo - ENV.pexh) * Math.exp(-(ph - PH.EVO) / 10);
+  }
+  const pIn = ENV.map * (1 - 0.00001 * ENV.rpm);
+  const pEx = ENV.pexh + (ENV.Pevo - ENV.pexh) * Math.exp(-(PH.IVO - PH.EVO) / 10);
+  if (ph < PH.EVC) return pEx + (pIn - pEx) * smooth01((ph - PH.IVO) / (PH.EVC - PH.IVO));
+  if (ph < 450) return pIn;
+  return pIn * (1 - (1 - ENV.ve) * smooth01((ph - 450) / 140));
+}
+
+/* nâng xupap (m) theo pha: nạp mở 350..590, xả mở 145..365 */
+function valveLift(ph, intake) {
+  const o = intake ? PH.IVO : PH.EVO, c = intake ? PH.IVC : PH.EVC;
+  if (ph < o || ph > c) return 0;
+  const u = (ph - o) / (c - o), s = Math.sin(Math.PI * u);
+  return PH.liftV * s * s;
+}
+
+const _k = { s: 0, sp: 0, spp: 0 };
+const _ph = new Float64Array(8);
+
+/* ma sát cơ khí theo FMEP (bar) = 0.6 + 0.10·k + 0.04·k², k = rpm/1000; τ = FMEP·Vd/(4π) */
+function frictionTorque(rpm) {
+  const k = rpm / 1000;
+  return (0.6 + 0.10 * k + 0.04 * k * k) * 1e5 * (PH.Vs * 8) / (4 * Math.PI);
+}
+
+function loadTorque(rpm) { return S.load * 380 * (1 - Math.exp(-rpm / 250)); }
+
+function mapOf(thr) { return 1e5 * (0.2 + 0.8 * (1 - Math.exp(-5 * thr)) / (1 - Math.exp(-5))); }
+
+/* một bước tích phân (dt giây mô phỏng) */
+function stepPhysics(dt) {
+  const rpm = S.w * 60 / TAU;
+  S.rpm = rpm;
+  let tauG = 0, Jeff = PH.J, cor = 0;
+  const psiDeg = S.psi * R2D;
+  for (let i = 0; i < 8; i++) {
+    let ph = (psiDeg - CYL[i].fire) % 720; if (ph < 0) ph += 720;
+    _ph[i] = ph;
+    kin(ph * D2R, _k);
+    const P = gasP(ph, PH.Vc + PH.A * (PH.sTop - _k.s));
+    tauG += -(P - PH.Pcase) * PH.A * _k.sp;
+    Jeff += PH.mRec * _k.sp * _k.sp;
+    cor += PH.mRec * _k.sp * _k.spp;
+  }
+  const tauF = S.w > 0.1 ? frictionTorque(rpm) : 0;
+  let tauS = 0;
+  if (S.starter) tauS = 230 * Math.max(0, 1 - rpm / 620);
+  const tau = tauG - tauF - loadTorque(rpm) + tauS - cor * S.w * S.w;
+  S.w += tau / Jeff * dt;
+  if (S.w < 0) S.w = 0;
+  S.psi = (S.psi + S.w * dt) % (2 * TAU);
+  S.tauG += tauG - tauF; S.tauCount = (S.tauCount || 0) + 1;
+}
+
+/* một khung hình: tiến thời gian mô phỏng simDt, cập nhật điều khiển */
+function advance(simDt, realDt) {
+  const rpm0 = S.w * 60 / TAU;
+  S.running = rpm0 > 350 && ENV.ign;
+  if (S.ignSwitch && S.starter && rpm0 > 480) S.starter = false;
+  /* điều khiển cầm chừng (ISC) */
+  if (S.ignSwitch && rpm0 > 300) {
+    S.iscI = (S.iscI === undefined ? 0.04 : S.iscI) + (800 - rpm0) * 2.5e-5 * simDt;
+    S.iscI = Math.min(0.4, Math.max(0.0, S.iscI));
+    S.isc = Math.min(0.5, Math.max(0.02, S.iscI + (800 - rpm0) * 6e-5));
+    if (rpm0 < 650) S.isc = Math.max(S.isc, 0.12);
+  } else { S.isc = S.starter ? 0.12 : 0.03; S.iscI = 0.04; }
+  const thrEff = Math.max(S.thr, S.isc);
+  S.thrEff = thrEff;
+  S.map = mapOf(thrEff);
+  /* ngắt nhiên liệu khi quá vòng tua */
+  if (rpm0 > 6500) S.fuelCut = true; else if (rpm0 < 6250) S.fuelCut = false;
+  ENV.ign = S.ignSwitch && !S.fuelCut && rpm0 > 60;
+  updateEnv();
+  const nSteps = Math.max(1, Math.min(2000, Math.ceil(simDt / 5e-5)));
+  const dt = simDt / nSteps;
+  S.tauG = 0; S.tauCount = 0;
+  for (let i = 0; i < nSteps; i++) stepPhysics(dt);
+  S.rpm = S.w * 60 / TAU;
+  const mean = S.tauG / Math.max(1, S.tauCount);
+  S.tauOut += (mean - S.tauOut) * Math.min(1, realDt * 6);
+  S.power = Math.max(0, S.tauOut * S.w) / 1000;
+  /* nhiệt độ nước làm mát & áp suất dầu (mô hình bậc nhất) */
+  /* Nhiệt nước: mô hình quán tính nhiệt bậc nhất; tải lớn làm tăng nhiệt,
+     quạt két nước giả lập bắt đầu hỗ trợ mạnh khi vượt khoảng 96°C. */
+  const heatLoad = Math.min(1, (S.power + S.load * 35) / 180);
+  const target = S.rpm > 300 ? 84 + 22 * heatLoad : 25;
+  const fan = S.coolant > 96 ? 1 + Math.min(1, (S.coolant - 96) / 12) : 1;
+  const tauHeat = S.rpm > 300 ? 52 / fan : 34;
+  S.coolant += (target - S.coolant) * Math.min(1, realDt / tauHeat);
+  /* Dầu nóng loãng hơn: áp suất giảm nhẹ khi nhiệt tăng; khi tắt máy áp suất về 0. */
+  const oilTempFactor = Math.max(0.72, 1.08 - Math.max(0, S.coolant - 25) * 0.0032);
+  S.oilP = S.rpm > 100 ? Math.min(6.2, (0.65 + S.rpm / 1250) * oilTempFactor) : 0;
+}
+
+/* ================= SÂN KHẤU 3D, VẬT LIỆU, ĐIỀU KHIỂN CAMERA ================= */
+const $ = s => document.querySelector(s);
+const $$ = s => [...document.querySelectorAll(s)];
+const canvas = $('#gl');
+let renderer;
+try { renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true, powerPreference: 'high-performance' }); }
+catch (err) { document.querySelector('#stage').insertAdjacentHTML('beforeend', '<p style="position:absolute;inset:auto 16px 16px;margin:0;color:var(--error)">Trình duyệt không bật được WebGL nên không hiển thị được mô hình 3D.</p>'); throw err; }
+const IS_MOBILE = matchMedia('(pointer:coarse)').matches || /Android|iPhone|iPad/i.test(navigator.userAgent);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, IS_MOBILE ? 1.5 : 2));
+renderer.outputEncoding = THREE.sRGBEncoding;
+renderer.toneMapping = THREE.NoToneMapping;
+renderer.localClippingEnabled = true;
+canvas.addEventListener('webglcontextlost', e => { e.preventDefault(); pageActive = false; const n = document.createElement('div'); n.id = 'glLost'; n.textContent = 'Đồ họa 3D tạm dừng do bộ nhớ đồ họa. Hãy tải lại trang để khôi phục.'; n.style.cssText = 'position:absolute;left:12px;right:12px;bottom:12px;padding:12px 16px;border-radius:14px;background:var(--sc-high);color:var(--error);z-index:20'; $('#stage').appendChild(n); });
+canvas.addEventListener('webglcontextrestored', () => { const n = $('#glLost'); if (n) n.remove(); pageActive = !document.hidden; last = performance.now(); if (pageActive && !frameQueued) { frameQueued = true; requestAnimationFrame(frame); } });
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(36, 1, 0.1, 200);
+
+/* ánh sáng: tổng cường độ cố ý thấp (đèn three.js r128 nhân thêm π) và không dùng bản đồ môi trường để tránh cháy sáng trên GPU điện thoại */
+scene.add(new THREE.HemisphereLight(0xe7edf4, 0x39332d, 0.48));
+const sun = new THREE.DirectionalLight(0xfff4e8, 0.62); sun.position.set(6, 12, 8); scene.add(sun);
+const fill = new THREE.DirectionalLight(0xc8d7e8, 0.28); fill.position.set(-9, 3, 7); scene.add(fill);
+const rim = new THREE.DirectionalLight(0xffd6b0, 0.18); rim.position.set(-4, 6, -9); scene.add(rim);
+
+/* sàn lưới và bóng đổ mềm để định vị độ sâu */
+(function floor() {
+  const y = -3.95;
+  const gh = new THREE.GridHelper(22, 22, 0x6f86a3, 0x6f86a3); gh.position.y = y; gh.material.transparent = true; gh.material.opacity = 0.22; gh.material.depthWrite = false; scene.add(gh);
+  const cv = document.createElement('canvas'); cv.width = cv.height = 128; const g = cv.getContext('2d');
+  const gr = g.createRadialGradient(64, 64, 4, 64, 64, 62); gr.addColorStop(0, 'rgba(0,0,0,0.55)'); gr.addColorStop(1, 'rgba(0,0,0,0)'); g.fillStyle = gr; g.fillRect(0, 0, 128, 128);
+  const sh = new THREE.Mesh(new THREE.PlaneGeometry(13, 9).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(cv), transparent: true, depthWrite: false }));
+  sh.position.y = y + 0.01; scene.add(sh);
+})();
+
+/* mặt phẳng cắt (mặt cắt dọc theo trục khuỷu) */
+const clipPlane = new THREE.Plane(new THREE.Vector3(0, 0, -1), 99);
+const shellMats = [];
+const lin = c => new THREE.Color(c).convertSRGBToLinear();
+const M = (c, metal, rough, extra) => new THREE.MeshStandardMaterial(Object.assign({ color: lin(c), metalness: Math.min(metal, 0.82), roughness: Math.max(rough, 0.24), clippingPlanes: [clipPlane] }, extra || {}));
+/* bảng màu theo hệ thống: vàng = trục khuỷu, đỏ = đối trọng, xanh lá = cam, xanh dương = nạp, cam = xả */
+const MAT = {
+  steel: M(0xaab4c0, 0.6, 0.35), dark: M(0x39414d, 0.5, 0.5), iron: M(0x7a8794, 0.5, 0.5),
+  alu: M(0xe2e7ee, 0.55, 0.3), crank: M(0xe3a72f, 0.55, 0.35), cw: M(0xb3372e, 0.4, 0.5),
+  cam: M(0x49c27a, 0.5, 0.35), rod: M(0x6aa6ee, 0.55, 0.35), bolt: M(0x20252c, 0.5, 0.45),
+  bearing: M(0xd98a3d, 0.6, 0.35), spring: M(0xf03e3e, 0.3, 0.4), ring: M(0x2c333b, 0.6, 0.35),
+  valveI: M(0xd5ecff, 0.6, 0.3), valveE: M(0xffc27d, 0.6, 0.3, { emissive: 0x000000 }),
+  rockI: M(0x23b7f2, 0.5, 0.35), rockE: M(0xff6b35, 0.5, 0.35), prI: M(0x3b82f6, 0.4, 0.4), prE: M(0xf97316, 0.4, 0.4),
+  plugC: M(0xf7f4ec, 0.1, 0.4), plugM: M(0xa9b0b9, 0.6, 0.35), chain: M(0x1b1f25, 0.6, 0.4), gear: M(0x9aa7b8, 0.6, 0.35),
+  fly: M(0x7e8da0, 0.5, 0.4), damper: M(0x2a2f37, 0.4, 0.5), manif: M(0x4aa8e0, 0.5, 0.35), lift: M(0xf5d547, 0.5, 0.35),
+  alt: M(0xd9a441, 0.2, 0.35), oil: M(0xe8a82a, 0.1, 0.3, { transparent: true, opacity: 0.5, depthWrite: false })
+};
+function shell(color, op) {
+  const m = new THREE.MeshStandardMaterial({ color: lin(color), metalness: 0.1, roughness: 0.6, transparent: true, opacity: op, side: THREE.DoubleSide, depthWrite: false, clippingPlanes: [clipPlane] });
+  m.userData.baseOp = op; shellMats.push(m); return m;
+}
+MAT.block = shell(0x5d86b3, 0.18); MAT.head = shell(0x7da3cf, 0.18); MAT.cover = shell(0xc0392b, 0.24); MAT.pan = shell(0x5d7390, 0.2);
+MAT.intk = shell(0x3f9fd6, 0.3); MAT.hdr = M(0x6b5b4e, 0.5, 0.45);
+const edgeMat = new THREE.LineBasicMaterial({ color: lin(0x9cc3ee), transparent: true, opacity: 0.25, clippingPlanes: [clipPlane] });
+shellMats.push(edgeMat);
+
+/* ----- đăng ký chi tiết: danh mục hiển thị, nhóm tách rời, thông tin chạm chọn ----- */
+const root = new THREE.Group(); scene.add(root);
+const CAT = {};        // tên danh mục -> mảng object
+const PART = {};       // partId -> {name, desc, meshes[]}
+const WRAP = {};       // danh mục -> mảng group dùng để tách rời
+function reg(cat, o) { (CAT[cat] = CAT[cat] || []).push(o); return o; }
+function info(id, name, desc) { if (!PART[id]) PART[id] = { name, desc, meshes: [] }; return id; }
+function mk(geo, mat, parent, id, pos, rot) {
+  const m = new THREE.Mesh(geo, mat);
+  if (pos) m.position.set(pos[0], pos[1], pos[2]);
+  if (rot) m.rotation.set(rot[0] || 0, rot[1] || 0, rot[2] || 0);
+  if (id) { m.userData.part = id; PART[id].meshes.push(m); }
+  parent.add(m); return m;
+}
+function grp(parent, x, y, z) { const g = new THREE.Group(); g.position.set(x || 0, y || 0, z || 0); parent.add(g); return g; }
+function wrap(cat, parent, ex) { const g = grp(parent); g.userData.ex = ex; (WRAP[cat] = WRAP[cat] || []).push(g); return g; }
+function edges(mesh) { const l = new THREE.LineSegments(new THREE.EdgesGeometry(mesh.geometry), edgeMat); mesh.add(l); return l; }
+
+/* hình học dùng chung */
+const G = {
+  cylY: (r, h, s) => new THREE.CylinderGeometry(r, r, h, s || 28),
+  cylZ: (r, h, s) => new THREE.CylinderGeometry(r, r, h, s || 28).rotateX(Math.PI / 2),
+  ring: (ro, ri, t, s) => {
+    const sh = new THREE.Shape(); sh.absarc(0, 0, ro, 0, TAU, false);
+    const h = new THREE.Path(); h.absarc(0, 0, ri, 0, TAU, true); sh.holes.push(h);
+    return new THREE.ExtrudeGeometry(sh, { depth: t, bevelEnabled: false, curveSegments: s || 32 }).translate(0, 0, -t / 2);
+  }
+};
+
+/* ----- camera quỹ đạo: 1 ngón xoay, 2 ngón thu phóng và kéo ----- */
+const cam = { theta: 0.95, phi: 1.12, dist: 15.5, target: new THREE.Vector3(0, 1.5, 0), auto: false, tween: null };
+function applyCam() {
+  const sp = Math.sin(cam.phi);
+  camera.position.set(cam.target.x + cam.dist * sp * Math.sin(cam.theta), cam.target.y + cam.dist * Math.cos(cam.phi), cam.target.z + cam.dist * sp * Math.cos(cam.theta));
+  camera.lookAt(cam.target);
+}
+const CAMS = {
+  iso: [0.95, 1.12, 15.5, [0, 1.5, 0]], front: [0, 1.5, 15, [0, 1.5, 0]],
+  side: [Math.PI / 2, 1.5, 16, [0, 1.5, 0]], top: [0.4, 0.2, 16, [0, 1.5, 0]]
+};
+function goCam(k) {
+  const c = CAMS[k]; cam.tween = { t: 0, from: [cam.theta, cam.phi, cam.dist, cam.target.clone()], to: c };
+}
+const ptrs = new Map(); let tapInfo = null;
+canvas.addEventListener('pointerdown', e => {
+  canvas.setPointerCapture(e.pointerId); ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  tapInfo = ptrs.size === 1 ? { x: e.clientX, y: e.clientY, t: performance.now(), moved: false } : null; cam.tween = null;
+});
+canvas.addEventListener('pointermove', e => {
+  const p = ptrs.get(e.pointerId); if (!p) return;
+  const dx = e.clientX - p.x, dy = e.clientY - p.y;
+  if (ptrs.size === 1) {
+    cam.theta -= dx * 0.0075; cam.phi = Math.min(Math.PI - 0.12, Math.max(0.12, cam.phi - dy * 0.0075));
+    if (tapInfo && Math.hypot(e.clientX - tapInfo.x, e.clientY - tapInfo.y) > 7) tapInfo.moved = true;
+  } else if (ptrs.size === 2) {
+    const o = [...ptrs.entries()].find(([id]) => id !== e.pointerId)[1];
+    const d0 = Math.hypot(p.x - o.x, p.y - o.y), d1 = Math.hypot(e.clientX - o.x, e.clientY - o.y);
+    cam.dist = Math.min(40, Math.max(5, cam.dist * d0 / Math.max(d1, 1)));
+    const mx = dx * 0.5, my = dy * 0.5, k = cam.dist * 0.0012;
+    const right = new THREE.Vector3().setFromMatrixColumn(camera.matrix, 0), up = new THREE.Vector3().setFromMatrixColumn(camera.matrix, 1);
+    cam.target.addScaledVector(right, -mx * k).addScaledVector(up, my * k);
+    if (tapInfo) tapInfo.moved = true;
+  }
+  p.x = e.clientX; p.y = e.clientY;
+});
+function endPtr(e) {
+  if (ptrs.has(e.pointerId) && tapInfo && !tapInfo.moved && performance.now() - tapInfo.t < 350 && e.type === 'pointerup') pickAt(e.clientX, e.clientY);
+  ptrs.delete(e.pointerId); if (ptrs.size !== 1) tapInfo = null;
+}
+canvas.addEventListener('pointerup', endPtr); canvas.addEventListener('pointercancel', endPtr);
+canvas.addEventListener('wheel', e => { e.preventDefault(); cam.dist = Math.min(40, Math.max(5, cam.dist * (1 + e.deltaY * 0.001))); }, { passive: false });
+
+function resize() {
+  const r = $('#stage').getBoundingClientRect();
+  if (!r.width || !r.height) return;
+  renderer.setSize(Math.round(r.width), Math.round(r.height), false);
+  camera.aspect = r.width / Math.max(r.height, 1);
+  /* Khung dọc cần góc nhìn rộng hơn; khung ngang ưu tiên độ lớn mô hình. */
+  camera.fov = camera.aspect < 0.8 ? 47 : camera.aspect > 1.7 ? 34 : 38;
+  camera.updateProjectionMatrix();
+  setParticleScale();
+}
+const stageRO = new ResizeObserver(resize); stageRO.observe($('#stage'));
+window.addEventListener('orientationchange', () => requestAnimationFrame(resize), { passive: true });
+window.addEventListener('resize', resize, { passive: true });
+
+/* ================= MÔ HÌNH ĐỘNG CƠ: KẾT CẤU TĨNH =================
+   1 đơn vị cảnh = 100 mm. Trục khuỷu dọc theo Z (phía trước = +Z, bánh đà = -Z).
+   Dãy trái (xi-lanh lẻ) nghiêng về -X, dãy phải (chẵn) về +X, mỗi dãy 45° so với phương thẳng đứng. */
+const U = 10;
+const E = { R: PH.r * U, Lr: PH.L * U, bore: PH.bore * U, P: 1.11, off: 0.13, camY: 1.25, deck: PH.sTop * U + 0.40, rb: 0.45, lift: PH.liftV * U, tipY: 3.45, pivY: 3.62 };
+const zPin = pos => (1.5 - pos) * E.P;
+const zOf = c => zPin(c.pos) + c.bank * E.off;
+const DEG = Math.PI / 180;
+const BK = [-1, 1];
+const DYN = { rot: [], cyl: [], cam: null, chain: null, throttle: null, header: [], rotor: null, oil: null, wires: [] };
+const axisOf = b => [Math.sin(b * Math.PI / 4), Math.cos(b * Math.PI / 4), 0];
+function bankW(cat, b, mag) { const w = wrap(cat, root, axisOf(b).map(v => v * mag)); const bg = grp(w); bg.rotation.z = -b * Math.PI / 4; return bg; }
+function toRoot(b, x, y) { const a = b * Math.PI / 4; return [x * Math.cos(a) + y * Math.sin(a), -x * Math.sin(a) + y * Math.cos(a)]; }
+
+function gearGeo(n, ro, ri, t, rh) {
+  const sh = new THREE.Shape(), st = TAU / n;
+  for (let i = 0; i < n; i++) {
+    const a = i * st, P = [[a, ri], [a + st * .14, ro], [a + st * .40, ro], [a + st * .54, ri]];
+    P.forEach((q, k) => { const x = Math.cos(q[0]) * q[1], y = Math.sin(q[0]) * q[1]; if (i === 0 && k === 0) sh.moveTo(x, y); else sh.lineTo(x, y); });
+  }
+  if (rh) { const h = new THREE.Path(); h.absarc(0, 0, rh, 0, TAU, true); sh.holes.push(h); }
+  return new THREE.ExtrudeGeometry(sh, { depth: t, bevelEnabled: false }).translate(0, 0, -t / 2);
+}
+function helixGeo(r, tube, turns) {
+  const pts = [], n = turns * 14;
+  for (let i = 0; i <= n; i++) { const t = i / n, a = t * turns * TAU; pts.push(new THREE.Vector3(r * Math.cos(a), t, r * Math.sin(a))); }
+  return new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), n * 2, tube, 6, false);
+}
+function lobeGeo(dur) {
+  const sh = new THREE.Shape(), lf = E.lift / PH.rocker;
+  for (let d = -180; d < 180; d += 3) {
+    const r = Math.abs(d) < dur / 2 ? E.rb + lf * Math.pow(Math.sin(Math.PI * (d / dur + .5)), 2) : E.rb;
+    const a = (90 + d) * DEG, x = r * Math.cos(a), y = r * Math.sin(a);
+    if (d === -180) sh.moveTo(x, y); else sh.lineTo(x, y);
+  }
+  return new THREE.ExtrudeGeometry(sh, { depth: 0.2, bevelEnabled: false }).translate(0, 0, -0.1);
+}
+
+/* ---------- mô tả chi tiết (chạm để xem) ---------- */
+info('block', 'Khối xi-lanh', 'Thân động cơ hình chữ V 90°, chứa 8 xi-lanh, 5 gối đỡ trục khuỷu và đường nước, dầu. Lỗ xi-lanh 101.6 mm.');
+info('liner', 'Lòng xi-lanh', 'Thành trong nơi piston trượt, được hoàn thiện nhẵn và giữ màng dầu bôi trơn.');
+info('crank', 'Trục khuỷu', 'Cross-plane: 4 chốt khuỷu lệch nhau 90°. Mỗi chốt chung cho 2 tay biên của hai dãy. 8 đối trọng cân bằng lực quán tính.');
+info('piston', 'Piston', 'Nhôm đúc, có 3 xéc-măng (hai nén, một dầu). Nhận áp suất cháy tối đa gần 60 bar và truyền lực xuống tay biên.');
+info('rod', 'Tay biên', 'Thép rèn tiết diện chữ I, dài 144.8 mm. Đầu nhỏ nối chốt piston, đầu to ôm chốt khuỷu qua bạc lót.');
+info('bearing', 'Bạc lót', 'Lớp hợp kim mềm giữa chốt khuỷu và đầu to tay biên, giữ màng dầu thủy động.');
+info('cam', 'Trục cam', 'Một trục đặt giữa khối, quay bằng nửa tốc độ trục khuỷu. 16 vấu cam đẩy con đội theo pha 350°–590° (nạp) và 145°–365° (xả).');
+info('lifter', 'Con đội', 'Trụ trượt trong lỗ khối máy, tì lên vấu cam và đẩy cần đẩy lên.');
+info('pushrod', 'Cần đẩy', 'Thanh thép rỗng truyền chuyển động từ con đội lên cò mổ. Xanh là đường nạp, cam là đường xả.');
+info('rocker', 'Cò mổ', 'Đòn bẩy tỷ số 1.5:1, đổi hành trình con đội 8.5 mm thành hành trình xupap 12.7 mm.');
+info('valve', 'Xupap', 'Xupap nạp lớn hơn xupap xả. Lò xo luôn ép xupap đóng, vấu cam thắng lò xo để mở.');
+info('spring', 'Lò xo xupap', 'Lò xo trụ ép xupap về đế. Bị nén khi xupap mở.');
+info('head', 'Nắp máy', 'Đậy trên xi-lanh, chứa buồng cháy, cổng nạp hướng vào rãnh giữa, cổng xả hướng ra ngoài.');
+info('cover', 'Nắp cò mổ', 'Che cụm cò mổ, giữ dầu bôi trơn bên trong.');
+info('intake', 'Cổ hút', 'Phân phối hỗn hợp từ bướm ga đến 8 cổng nạp. Bướm ga mở theo bàn đạp ga.');
+info('throttle', 'Bướm ga', 'Van cánh điều khiển lưu lượng khí vào. Đóng gần kín khi cầm chừng nên MAP thấp.');
+info('exhaust', 'Cổ xả', 'Mỗi dãy 4 ống gom về một ống thu. Nóng đỏ dần theo công suất.');
+info('plug', 'Bugi', 'Tạo tia lửa đốt hòa khí trước ĐCT khoảng 8°–38° tùy vòng tua.');
+info('dist', 'Chia điện', 'Quay nửa tốc độ trục khuỷu, rotor lần lượt nối cao áp tới từng bugi theo thứ tự 1-8-4-3-6-5-7-2.');
+info('pan', 'Cácte dầu', 'Chứa khoảng 5 lít dầu cho bơm dầu hút đi bôi trơn.');
+info('fly', 'Bánh đà', 'Dự trữ động năng để làm đều mô-men giữa các kỳ nổ. Vành răng ăn khớp với mô-tơ đề.');
+info('damper', 'Puly giảm chấn', 'Vòng cao su triệt dao động xoắn của trục khuỷu, đồng thời là puly dẫn đai phụ tải.');
+info('timing', 'Cụm cam dẫn động', 'Nhông 20 răng trên trục khuỷu kéo nhông cam 40 răng bằng xích. Tỷ số 2:1 đảm bảo mỗi xupap mở một lần trong 720°.');
+
+/* ---------- trục khuỷu ---------- */
+function buildCrank() {
+  const w = wrap('crank', root, [0, -1.7, 0]), cg = grp(w); DYN.rot.push(cg);
+  for (let j = 0; j < 5; j++) {
+    const z = (j - 2) * E.P;
+    mk(G.cylZ(0.31, 0.5, 36), MAT.crank, cg, 'crank', [0, 0, z]);
+    mk(G.ring(0.335, 0.312, 0.44, 36), MAT.bearing, cg, 'bearing', [0, 0, z]);
+  }
+  mk(G.cylZ(0.36, 0.9, 32), MAT.crank, cg, 'crank', [0, 0, 2.95]);
+  mk(G.cylZ(0.75, 0.22, 36), MAT.crank, cg, 'crank', [0, 0, -2.6]);
+  const cwShape = new THREE.Shape(); cwShape.moveTo(0, 0); cwShape.absarc(0, 0, 0.82, (270 - 64) * DEG, (270 + 64) * DEG, false); cwShape.lineTo(0, 0);
+  const cwGeo = new THREE.ExtrudeGeometry(cwShape, { depth: 0.17, bevelEnabled: false }).translate(0, 0, -0.085);
+  const THETA = { 0: 315, 1: 225, 2: 45, 3: 135 };
+  for (let pos = 0; pos < 4; pos++) {
+    const pg = grp(cg, 0, 0, zPin(pos)); pg.rotation.z = -THETA[pos] * DEG;
+    mk(G.cylZ(0.267, 0.66, 32), MAT.crank, pg, 'crank', [0, E.R, 0]);
+    [1, -1].forEach(sg => {
+      const z = sg * 0.37;
+      mk(G.cylZ(0.46, 0.17, 32), MAT.crank, pg, 'crank', [0, 0, z]);
+      mk(new THREE.BoxGeometry(0.7, E.R, 0.17), MAT.crank, pg, 'crank', [0, E.R / 2, z]);
+      mk(G.cylZ(0.35, 0.17, 28), MAT.crank, pg, 'crank', [0, E.R, z]);
+      mk(cwGeo, MAT.cw, pg, 'crank', [0, 0, z]);
+    });
+  }
+  const w2 = wrap('fly', root, [0, 0, -2.4]), fg = grp(w2, 0, 0, -2.95); DYN.rot.push(fg);
+  mk(G.cylZ(1.70, 0.30, 64), MAT.fly, fg, 'fly');
+  mk(gearGeo(96, 1.80, 1.72, 0.30), MAT.steel, fg, 'fly');
+  mk(G.cylZ(0.55, 0.40, 32), MAT.fly, fg, 'fly', [0, 0, 0.1]);
+  for (let i = 0; i < 6; i++) { const a = i * TAU / 6; mk(G.cylZ(0.05, 0.36, 12), MAT.bolt, fg, 'fly', [0.95 * Math.cos(a), 0.95 * Math.sin(a), 0]); }
+  mk(new THREE.BoxGeometry(0.14, 0.14, 0.34), M(0xd33a2c, 0.2, 0.5), fg, 'fly', [0, 1.62, 0]);
+  const w3 = wrap('fly', root, [0, 0, 2.6]), dg = grp(w3, 0, 0, 3.25); DYN.rot.push(dg);
+  mk(G.cylZ(0.40, 0.58, 28), MAT.damper, dg, 'damper');
+  mk(G.ring(0.95, 0.74, 0.30, 48), MAT.dark, dg, 'damper', [0, 0, 0.1]);
+  mk(G.ring(0.74, 0.50, 0.50, 48), MAT.iron, dg, 'damper');
+  for (let k = 0; k < 3; k++) mk(G.ring(0.99, 0.95, 0.07, 48), MAT.steel, dg, 'damper', [0, 0, 0.2 - k * 0.12]);
+  mk(new THREE.BoxGeometry(0.06, 0.16, 0.32), M(0xffffff, 0, 0.6), dg, 'damper', [0, 0.92, 0.1]);
+}
+
+/* ---------- trục cam, nhông, xích ---------- */
+function buildCam() {
+  const w = wrap('cam', root, [0, 0.9, 0]), cg = grp(w, 0, E.camY, 0); DYN.cam = cg;
+  mk(G.cylZ(0.28, 5.2, 24), MAT.cam, cg, 'cam', [0, 0, 0.1]);
+  [2.4, 1.11, -1.11, -2.4].forEach(z => mk(G.cylZ(0.36, 0.26, 28), MAT.steel, cg, 'cam', [0, 0, z]));
+  const gI = lobeGeo(120), gE = lobeGeo(110); DYN.lobes = [];
+  CYL.forEach(c => {
+    const j = c.pos, sgE = (j % 2 === 0) ? 1 : -1, zc = zOf(c);
+    [[true, zc - sgE * 0.3, gI, 470, c.alpha], [false, zc + sgE * 0.3, gE, 255, c.alpha]].forEach(L => {
+      const m = mk(L[2], MAT.cam, cg, 'cam', [0, 0, L[1]]);
+      m.rotation.z = (-L[4] - (c.fire + L[3]) / 2) * DEG;
+    });
+  });
+  const w2 = wrap('cam', root, [0, 0, 2.4]);
+  const r1 = 0.42, r2 = 0.84, zS = 2.62;
+  const sg = grp(w2, 0, 0, zS); DYN.rot.push(sg);
+  mk(gearGeo(20, r1, r1 - 0.06, 0.24, 0.16), MAT.gear, sg, 'timing');
+  mk(G.cylZ(0.16, 0.5, 20), MAT.gear, sg, 'timing');
+  const cs = grp(w2, 0, E.camY, zS); DYN.camSpr = cs;
+  mk(gearGeo(40, r2, r2 - 0.06, 0.24, 0.16), MAT.gear, cs, 'timing');
+  for (let i = 0; i < 5; i++) { const a = i * TAU / 5; mk(G.cylZ(0.12, 0.26, 16), MAT.bolt, cs, 'timing', [0.5 * Math.cos(a), 0.5 * Math.sin(a), 0]); }
+  const d = E.camY, ph = Math.asin((r2 - r1) / d), straight = Math.sqrt(d * d - (r2 - r1) * (r2 - r1));
+  const segs = [straight, r2 * (Math.PI + 2 * ph), straight, r1 * (Math.PI - 2 * ph)], total = segs.reduce((a, b) => a + b, 0);
+  const pt = s => {
+    s = ((s % total) + total) % total;
+    if (s < segs[0]) { const f = s / segs[0], x0 = r1 * Math.cos(-ph), y0 = r1 * Math.sin(-ph), x1 = r2 * Math.cos(-ph), y1 = d + r2 * Math.sin(-ph); return [x0 + (x1 - x0) * f, y0 + (y1 - y0) * f, Math.PI / 2 - ph]; }
+    s -= segs[0];
+    if (s < segs[1]) { const a = -ph + s / r2; return [r2 * Math.cos(a), d + r2 * Math.sin(a), a + Math.PI / 2]; }
+    s -= segs[1];
+    if (s < segs[2]) { const f = s / segs[2], x0 = r2 * Math.cos(Math.PI + ph), y0 = d + r2 * Math.sin(Math.PI + ph), x1 = r1 * Math.cos(Math.PI + ph), y1 = r1 * Math.sin(Math.PI + ph); return [x0 + (x1 - x0) * f, y0 + (y1 - y0) * f, 3 * Math.PI / 2 - ph]; }
+    s -= segs[2];
+    const a = Math.PI + ph + s / r1; return [r1 * Math.cos(a), r1 * Math.sin(a), a + Math.PI / 2];
+  };
+  const N = 68, im = new THREE.InstancedMesh(new THREE.BoxGeometry(total / N * 0.72, 0.06, 0.2), MAT.chain, N);
+  im.userData.part = 'timing'; PART.timing.meshes.push(im); im.position.z = zS; w2.add(im); im.frustumCulled = false;
+  DYN.chain = { im, pt, total, N, dummy: new THREE.Object3D(), r1 };
+  const cov = mk(new THREE.BoxGeometry(4.6, 4.0, 0.12), MAT.cover, w2, 'timing', [0, 0.9, 3.0]); edges(cov);
+}
+
+/* ---------- khối máy, nắp, cácte ---------- */
+function shellBox(geo, mat, parent, id, pos) { const m = mk(geo, mat, parent, id, pos); edges(m); return m; }
+function buildBlock() {
+  const w = wrap('block', root, [0, 0, 0]);
+  const cc = new THREE.Shape();
+  [[-1.45, 0.9], [-1.45, -0.9], [-1.0, -1.28], [1.0, -1.28], [1.45, -0.9], [1.45, 0.9]].forEach((p, i) => i ? cc.lineTo(p[0], p[1]) : cc.moveTo(p[0], p[1]));
+  const cm = mk(new THREE.ExtrudeGeometry(cc, { depth: 5.1, bevelEnabled: false }).translate(0, 0, -2.55), MAT.block, w, 'block'); edges(cm);
+  const liner = G.ring(0.64, 0.508, 1.45, 36).rotateX(Math.PI / 2);
+  MAT.liner = shell(0x7f8c99, 0.34);
+  BK.forEach(b => {
+    const bg = bankW('block', b, 0);
+    shellBox(new THREE.BoxGeometry(2.3, 1.75, 4.9), MAT.block, bg, 'block', [0, 1.425, b * E.off]);
+    CYL.filter(c => c.bank === b).forEach(c => mk(liner, MAT.liner, bg, 'liner', [0, 1.575, zOf(c)]));
+  });
+  const pw = wrap('pan', root, [0, -2.4, 0]);
+  const ps = new THREE.Shape(); [[-1.65, -1.28], [-1.3, -2.75], [1.3, -2.75], [1.65, -1.28]].forEach((p, i) => i ? ps.lineTo(p[0], p[1]) : ps.moveTo(p[0], p[1]));
+  const pm = mk(new THREE.ExtrudeGeometry(ps, { depth: 4.9, bevelEnabled: false }).translate(0, 0, -2.45), MAT.pan, pw, 'pan'); edges(pm);
+  DYN.oil = mk(new THREE.BoxGeometry(2.4, 0.5, 4.5), MAT.oil, pw, 'pan', [0, -2.45, 0]);
+}
+function buildHeads() {
+  BK.forEach(b => {
+    const hg = bankW('head', b, 1.3);
+    shellBox(new THREE.BoxGeometry(2.3, 0.85, 4.9), MAT.head, hg, 'head', [0, 2.725, b * E.off]);
+    const cg = bankW('cover', b, 2.5);
+    shellBox(new THREE.BoxGeometry(2.0, 0.75, 4.8), MAT.cover, cg, 'cover', [0, 3.52, b * E.off]);
+    const lip = mk(new THREE.BoxGeometry(2.1, 0.06, 4.9), MAT.dark, cg, 'cover', [0, 3.15, b * E.off]);
+  });
+}
+function buildIntake() {
+  const w = wrap('intake', root, [0, 2.7, 0]);
+  shellBox(new THREE.BoxGeometry(1.5, 1.05, 4.9), MAT.intk, w, 'intake', [0, 2.35, 0]);
+  shellBox(new THREE.BoxGeometry(1.3, 0.5, 3.1), MAT.intk, w, 'intake', [0, 3.15, 0.2]);
+  const tb = mk(G.cylY(0.62, 0.7, 32), MAT.alu, w, 'throttle', [0, 3.75, 0.2]);
+  mk(G.ring(0.58, 0.44, 0.3, 32).rotateX(Math.PI / 2), MAT.steel, w, 'throttle', [0, 4.15, 0.2]);
+  const pl = grp(w, 0, 3.75, 0.2);
+  const plate = mk(new THREE.CylinderGeometry(0.46, 0.46, 0.03, 28), MAT.dark, pl, 'throttle');
+  mk(G.cylZ(0.04, 1.3, 10), MAT.steel, pl, 'throttle', [0, 0, 0]).rotation.x = 0;
+  DYN.throttle = pl; pl.rotation.x = 0;
+  BK.forEach(b => CYL.filter(c => c.bank === b).forEach(c => {
+    const si = -b, zv = zOf(c), sgE = (c.pos % 2 === 0) ? 1 : -1, zi = zv - sgE * 0.3;
+    const r = toRoot(b, si * 1.0, 2.7), q = [Math.sign(r[0]) * 0.3 * 0, 2.5];
+    const cv = new THREE.CatmullRomCurve3([new THREE.Vector3(r[0], r[1], zi), new THREE.Vector3(r[0] * 0.6, r[1] * 0.85 + 0.1, zi), new THREE.Vector3(0.05 * si, 2.45, zi)]);
+    mk(new THREE.TubeGeometry(cv, 10, 0.17, 10, false), MAT.manif, w, 'intake');
+  }));
+}
+function buildExhaust() {
+  BK.forEach(b => {
+    const w = wrap('exhaust', root, [b * 1.6, -0.4, 0]), si = -b;
+    const pts4 = CYL.filter(c => c.bank === b);
+    pts4.forEach(c => {
+      const sgE = (c.pos % 2 === 0) ? 1 : -1, ze = zOf(c) + sgE * 0.3, r = toRoot(b, -si * 1.05, 2.7);
+      const cv = new THREE.CatmullRomCurve3([
+        new THREE.Vector3(r[0] - b * 0.05, r[1], ze), new THREE.Vector3(r[0] + b * 0.55, r[1] + 0.05, ze),
+        new THREE.Vector3(b * 3.15, 0.5, ze * 0.55), new THREE.Vector3(b * 3.4, -0.8, ze * 0.15)]);
+      const m = mk(new THREE.TubeGeometry(cv, 30, 0.16, 12, false), M(0x5b5148, 0.9, 0.45, { emissive: 0x000000 }), w, 'exhaust'); DYN.header.push(m);
+    });
+    const col = mk(G.cylZ(0.27, 3.6, 20), M(0x4d453e, 0.9, 0.5, { emissive: 0x000000 }), w, 'exhaust', [b * 3.4, -1.05, -1.0]); DYN.header.push(col);
+    mk(G.cylZ(0.2, 1.4, 20), MAT.dark, w, 'exhaust', [b * 3.4, -1.05, -3.5]);
+  });
+}
+
+/* ================= CHI TIẾT ĐỘNG THEO TỪNG XI-LANH ================= */
+const GASM = (c) => new THREE.MeshBasicMaterial({ color: c, transparent: true, opacity: 0.38, depthWrite: false, clippingPlanes: [clipPlane] });
+const DIST = { x: 0, y: 3.3, z: -2.78 };
+const _c1 = new THREE.Color(), _c2 = new THREE.Color();
+const COL = { intake: new THREE.Color(0.35, 0.62, 1.0), mix: new THREE.Color(1.0, 0.86, 0.5), burn: new THREE.Color(1.0, 0.42, 0.08), exh: new THREE.Color(0.58, 0.5, 0.46) };
+
+function buildCylinders() {
+  const crown = G.cylY(0.5, 0.75, 36), ringG = new THREE.TorusGeometry(0.5, 0.017, 6, 36).rotateX(Math.PI / 2);
+  const rodBig = G.ring(0.40, 0.285, 0.22, 32), rodBear = G.ring(0.285, 0.268, 0.23, 32), rodSmall = G.ring(0.2, 0.115, 0.22, 24);
+  const beamLen = E.Lr - 0.53, flange = new THREE.BoxGeometry(0.05, beamLen, 0.22), web = new THREE.BoxGeometry(0.2, beamLen, 0.07);
+  const pinG = G.cylZ(0.115, 0.56, 20);
+  const stem = G.cylY(0.045, 1.09, 10), headI = new THREE.CylinderGeometry(0.05, 0.23, 0.12, 24), headE = new THREE.CylinderGeometry(0.05, 0.2, 0.12, 24);
+  const retG = G.cylY(0.16, 0.05, 20), helix = helixGeo(0.15, 0.022, 7), prG = G.cylY(0.035, 1, 8).translate(0, 0.5, 0), lifG = G.cylY(0.105, 0.55, 16);
+  const rockG = new THREE.BoxGeometry(0.62, 0.12, 0.13), ball = new THREE.SphereGeometry(0.09, 14, 10);
+  const plugP = G.cylY(0.075, 0.6, 14), plugHex = new THREE.CylinderGeometry(0.115, 0.115, 0.14, 6), plugTip = G.cylY(0.04, 0.22, 10), plugTerm = G.cylY(0.03, 0.14, 8);
+  const gasG = G.cylY(0.49, 1, 32), flameG = new THREE.SphereGeometry(0.5, 18, 12), sparkG = new THREE.SphereGeometry(0.09, 10, 8);
+  const sparkMat = new THREE.MeshBasicMaterial({ color: 0xcfe6ff, clippingPlanes: [clipPlane] });
+  const pw = BK.map(b => wrap('piston', root, axisOf(b).map(v => v * 1.0)));
+  const vb = {}, hb = {}, gb = {}, ib = {};
+  BK.forEach(b => { vb[b] = bankW('valve', b, 2.0); gb[b] = bankW('gas', b, 0); ib[b] = bankW('ign', b, 1.9); });
+  CYL.forEach(c => {
+    const b = c.bank, si = -b, z = zOf(c), P = pw[b > 0 ? 1 : 0], sgE = (c.pos % 2 === 0) ? 1 : -1, d = { c, z, v: {} };
+    /* piston */
+    d.pg = grp(P);
+    mk(crown, MAT.alu, d.pg, 'piston', [0, 0.025, 0]);
+    [0.30, 0.24, 0.17].forEach(y => mk(ringG, MAT.ring, d.pg, 'piston', [0, y, 0]));
+    mk(pinG, MAT.steel, d.pg, 'piston', [0, 0, 0]);
+    /* tay biên */
+    d.rg = grp(P);
+    mk(rodBig, MAT.rod, d.rg, 'rod'); mk(rodBear, MAT.bearing, d.rg, 'bearing');
+    mk(rodSmall, MAT.rod, d.rg, 'rod', [0, E.Lr, 0]);
+    [-0.09, 0.09].forEach(x => mk(flange, MAT.rod, d.rg, 'rod', [x, 0.36 + beamLen / 2, 0]));
+    mk(web, MAT.rod, d.rg, 'rod', [0, 0.36 + beamLen / 2, 0]);
+    [-0.33, 0.33].forEach(x => mk(G.cylY(0.045, 0.2, 10), MAT.bolt, d.rg, 'rod', [x, -0.12, 0]));
+    /* buồng cháy: khí, lửa, tia lửa */
+    d.gas = mk(gasG, GASM(0x5aa0ff), gb[b], null, [0, 2, z]);
+    d.flame = mk(flameG, new THREE.MeshBasicMaterial({ color: 0xff8a1f, transparent: true, opacity: 0.8, depthWrite: false, clippingPlanes: [clipPlane] }), gb[b], null, [0, 2.2, z]);
+    d.spark = mk(sparkG, sparkMat, gb[b], null, [-si * 0.5, 2.3, z]);
+    /* bugi */
+    const pl = grp(ib[b], -si * 0.65, 0, z);
+    mk(plugTip, MAT.plugM, pl, 'plug', [0, 2.41, 0]);
+    mk(plugP, MAT.plugC, pl, 'plug', [0, 3.0, 0]); mk(plugHex, MAT.plugM, pl, 'plug', [0, 2.62, 0]); mk(plugTerm, MAT.steel, pl, 'plug', [0, 3.36, 0]);
+    /* xupap, lò xo, cò mổ, cần đẩy, con đội */
+    [[true, -sgE], [false, sgE]].forEach(([isI, sg]) => {
+      const xv = isI ? si * 0.30 : -si * 0.30, zv = z + sg * 0.3, xpiv = xv + si * 0.3, xp = xpiv + si * 0.2;
+      const xl = -E.camY * Math.sin(c.alpha * DEG), lc = E.camY * Math.cos(c.alpha * DEG) + E.rb + 0.275, ltop = lc + 0.275;
+      const bg = vb[b], vg = grp(bg, xv, 0, zv);
+      mk(stem, isI ? MAT.valveI : MAT.valveE, vg, 'valve', [0, 2.36 + 0.545, 0]); mk(isI ? headI : headE, isI ? MAT.valveI : MAT.valveE, vg, 'valve', [0, 2.39, 0]);
+      mk(retG, MAT.steel, vg, 'spring', [0, 3.05, 0]);
+      const sp = mk(helix, MAT.spring, bg, 'spring', [xv, 2.55, zv]); sp.scale.y = 0.5;
+      const rk = grp(bg, xpiv, E.pivY, zv);
+      mk(rockG, isI ? MAT.rockI : MAT.rockE, rk, 'rocker', [-si * 0.05, -0.1, 0]); mk(ball, MAT.steel, rk, 'rocker');
+      mk(G.cylY(0.05, 0.3, 10), MAT.dark, bg, 'rocker', [xpiv, E.pivY + 0.22, zv]);
+      const lf = mk(lifG, MAT.lift, bg, 'lifter', [xl, lc, zv]);
+      const pr = grp(bg, xl, ltop, zv), dx = xp - xl, dy = E.tipY - ltop, len = Math.hypot(dx, dy);
+      const prm = mk(prG, isI ? MAT.prI : MAT.prE, pr, 'pushrod'); prm.scale.y = len; pr.rotation.z = Math.atan2(-dx, dy);
+      d.v[isI ? 'I' : 'E'] = { vg, sp, rk, lf, pr, lc, ltop, si };
+    });
+    /* dây cao áp */
+    const k = c.fire / 2 * DEG, tx = DIST.x + 0.42 * Math.cos(k), tz = DIST.z + 0.42 * Math.sin(k);
+    const r0 = toRoot(b, -si * 0.65, 3.42), pt = [new THREE.Vector3(r0[0], r0[1], z), new THREE.Vector3(r0[0] * 0.5, r0[1] + 0.9, z * 0.6 + tz * 0.4), new THREE.Vector3(tx * 1.0, DIST.y + 1.15, tz + (z < tz ? -0.3 : 0.1)), new THREE.Vector3(tx, DIST.y + 0.78, tz)];
+    const wm = M(0x1d1f23, 0.2, 0.6, { emissive: 0x000000 });
+    const wire = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pt), 26, 0.03, 6, false), wm);
+    wire.userData.part = 'dist'; PART.dist.meshes.push(wire); wrap('ign', root, [0, 3.0, 0]).add(wire); d.wire = wm;
+    DYN.cyl.push(d);
+  });
+  const dw = wrap('ign', root, [0, 3.0, 0]);
+  mk(G.cylY(0.3, 1.0, 24), MAT.alu, dw, 'dist', [DIST.x, DIST.y, DIST.z]);
+  mk(G.cylY(0.5, 0.36, 24), shell(0x30343a, 0.55), dw, 'dist', [DIST.x, DIST.y + 0.68, DIST.z]);
+  const rt = grp(dw, DIST.x, DIST.y + 0.6, DIST.z); mk(new THREE.BoxGeometry(0.4, 0.04, 0.1), MAT.bearing, rt, 'dist', [0.2, 0, 0]); DYN.rotor = rt;
+  CYL.forEach((c, i) => { const k = c.fire / 2 * DEG; mk(G.cylY(0.04, 0.2, 8), MAT.steel, dw, 'dist', [DIST.x + 0.42 * Math.cos(k), DIST.y + 0.82, DIST.z + 0.42 * Math.sin(k)]); });
+}
+
+/* ================= CẬP NHẬT MÔ HÌNH THEO TRẠNG THÁI VẬT LÝ ================= */
+const _k2 = { s: 0, sp: 0, spp: 0 };
+const _hot = new THREE.Color();
+function updateModel() {
+  const psi = S.psi, deg = psi * R2D;
+  DYN.rot.forEach(g => g.rotation.z = psi);
+  DYN.cam.rotation.z = psi / 2; DYN.camSpr.rotation.z = psi / 2;
+  const ch = DYN.chain;
+  for (let i = 0; i < ch.N; i++) {
+    const q = ch.pt(i * ch.total / ch.N + psi * ch.r1);
+    ch.dummy.position.set(q[0], q[1], 0); ch.dummy.rotation.set(0, 0, q[2]); ch.dummy.updateMatrix(); ch.im.setMatrixAt(i, ch.dummy.matrix);
+  }
+  ch.im.instanceMatrix.needsUpdate = true;
+  DYN.throttle.rotation.z = (S.thr * 0.92 + 0.02) * Math.PI / 2;
+  DYN.rotor.rotation.y = -((deg + S.adv) / 2) * DEG;
+  const heat = Math.min(1, S.power / 140) * 0.9 + (S.running ? 0.08 : 0);
+  DYN.header.forEach(m => m.material.emissive.setRGB(heat * 0.95, heat * 0.26, heat * 0.04));
+  const ign = ENV.ign;
+  DYN.cyl.forEach(d => {
+    const c = d.c; let ph = (deg - c.fire) % 720; if (ph < 0) ph += 720;
+    kin(ph * DEG, _k2);
+    const sU = _k2.s * U, a = c.alpha * DEG, Qx = Math.sin(a) * sU, Qy = Math.cos(a) * sU;
+    d.pg.position.set(Qx, Qy, d.z); d.pg.rotation.z = -a;
+    const phi = (c.theta - deg) * DEG, Px = E.R * Math.sin(phi), Py = E.R * Math.cos(phi);
+    d.rg.position.set(Px, Py, d.z); d.rg.rotation.z = Math.atan2(-(Qx - Px), Qy - Py);
+    /* khí trong xi-lanh */
+    const cy = sU + 0.4, h = Math.max(0.02, 2.34 - cy);
+    d.gas.position.y = cy + h / 2; d.gas.scale.y = h;
+    const f = ign ? burnFrac(ph) : 0;
+    if (ph < 180) { _c1.copy(COL.mix).lerp(COL.burn, f); _c2.copy(COL.exh); _c1.lerp(_c2, smooth01((ph - 110) / 70)); }
+    else if (ph < 360) _c1.copy(COL.exh);
+    else if (ph < 540) _c1.copy(COL.intake);
+    else { _c1.copy(COL.intake).lerp(COL.mix, smooth01((ph - 540) / 120)); if (ph >= 720 - S.adv) _c1.lerp(COL.burn, f); }
+    d.gas.material.color.copy(_c1);
+    /* ngọn lửa và tia lửa */
+    const burning = ign && f > 0.01 && (ph >= 720 - S.adv || ph < PH.EVO);
+    d.flame.visible = burning && FLAME;
+    if (burning) {
+      const fade = ph < PH.EVO ? 1 - smooth01((ph - 50) / 90) : 1, sc = 0.25 + 0.75 * Math.pow(f, 0.6);
+      d.flame.position.y = cy + Math.min(h, 0.45) * 0.5; d.flame.position.y = Math.min(d.flame.position.y, 2.3);
+      d.flame.scale.set(sc * 0.95, Math.max(0.03, h * 0.9) * sc + 0.02, sc * 0.95);
+      d.flame.material.opacity = 0.56 * fade; _c2.setHSL(0.09 + 0.05 * (1 - f), 1, 0.5 + 0.18 * f); d.flame.material.color.copy(_c2);
+    }
+    const u = ph - (720 - S.adv), sp = ign && ph > 600 && u >= 0 && u < 9;
+    d.spark.visible = sp && FLAME; d.wire.emissive.setRGB(sp ? 0.5 : 0, sp ? 0.7 : 0, sp ? 1 : 0);
+    /* cơ cấu xupap */
+    ['I', 'E'].forEach(k => {
+      const v = d.v[k], lu = valveLift(ph, k === 'I') * U, rise = lu / PH.rocker;
+      v.vg.position.y = -lu; v.sp.scale.y = 0.5 - lu; v.rk.rotation.z = rise * v.si / 0.2;
+      v.lf.position.y = v.lc + rise; v.pr.position.y = v.ltop + rise;
+    });
+  });
+}
+let FLAME = true;
+
+/* ================= CHI TIẾT BỔ SUNG: ray xăng, kim phun, bu-lông, gân cácte, họa tiết bề mặt, đường đi của hạt ================= */
+info('fuel', 'Ray xăng, kim phun', 'Ray dẫn xăng áp suất khoảng 3 bar tới 8 kim phun. Mỗi kim phun xăng vào cổng nạp khi xupap nạp mở, đầu kim sáng lên lúc đang phun.');
+info('bolt', 'Bu-lông', 'Bu-lông lục giác bắt nắp máy và nắp cò mổ, siết đều quanh mép để giữ kín dầu và khí.');
+
+/* ---------- họa tiết bề mặt: bump và roughness sinh bằng canvas ---------- */
+const TEX = {}, GRAIN = [];
+function noiseTex(kind) {
+  const N = 256, cv = document.createElement('canvas'); cv.width = cv.height = N;
+  const g = cv.getContext('2d'), im = g.createImageData(N, N);
+  const row = Array.from({ length: N }, () => rndRange(-7, 7));
+  for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+    const n = Math.random() * 10 - 5;
+    let v = 128 + n;
+    if (kind === 'brushed') {
+      // Fine directional machining marks with very low contrast.
+      v += row[y] * 0.45 + (Math.random() * 8 - 4);
+      v += Math.sin(x * 0.22 + y * 0.018) * 2.2;
+    } else if (kind === 'knurl') {
+      const ridge = Math.sin((x + y) * 0.42) * Math.sin((x - y) * 0.42);
+      v += ridge * 8 + n * 0.45;
+    } else if (kind === 'rubber') {
+      v += Math.sin(x * 0.7) * Math.sin(y * 0.7) * 4 + n * 0.6;
+    } else {
+      // Soft cast-metal / sand-cast micro texture.
+      v += (Math.sin(x * 0.13) + Math.cos(y * 0.17) + Math.sin((x + y) * 0.09)) * 2.4 + n * 0.7;
+    }
+    const i = (y * N + x) * 4, q = Math.max(0, Math.min(255, v));
+    im.data[i] = im.data[i + 1] = im.data[i + 2] = q; im.data[i + 3] = 255;
+  }
+  g.putImageData(im, 0, 0);
+  const t = new THREE.CanvasTexture(cv);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(kind === 'brushed' ? 2.5 : 2, kind === 'brushed' ? 5 : 2);
+  t.anisotropy = Math.min(4, renderer.capabilities.getMaxAnisotropy());
+  return t;
+}
+function rndRange(a, b) { return a + Math.random() * (b - a); }
+function grain(mat, kind, scale) {
+  const t = TEX[kind] || (TEX[kind] = noiseTex(kind));
+  mat.bumpMap = t; mat.bumpScale = scale; mat.roughnessMap = t;
+  mat.roughness = Math.max(mat.roughness, kind === 'brushed' ? 0.31 : 0.42);
+  mat.needsUpdate = true; GRAIN.push({ mat, t });
+}
+function setGrain(on) { GRAIN.forEach(o => { o.mat.bumpMap = on ? o.t : null; o.mat.roughnessMap = on ? o.t : null; o.mat.needsUpdate = true; }); }
+function applyGrain() {
+  [['crank', 'brushed', 0.035], ['cw', 'grain', 0.045], ['rod', 'brushed', 0.028], ['alu', 'grain', 0.025], ['cam', 'brushed', 0.025], ['fly', 'brushed', 0.035], ['damper', 'knurl', 0.025],
+   ['gear', 'brushed', 0.028], ['iron', 'grain', 0.055], ['dark', 'rubber', 0.018], ['steel', 'brushed', 0.022], ['chain', 'brushed', 0.025], ['hdr', 'grain', 0.035], ['lift', 'brushed', 0.022],
+   ['valveI', 'brushed', 0.018], ['valveE', 'brushed', 0.022], ['bearing', 'brushed', 0.02], ['alt', 'grain', 0.035]].forEach(a => grain(MAT[a[0]], a[1], a[2]));
+  DYN.header.forEach(m => grain(m.material, 'grain', 0.035));
+}
+
+function inst(parent, geo, mat, pts, id) {
+  const im = new THREE.InstancedMesh(geo, mat, pts.length), o = new THREE.Object3D();
+  pts.forEach((p, i) => { o.position.set(p[0], p[1], p[2]); o.updateMatrix(); im.setMatrixAt(i, o.matrix); });
+  im.userData.part = id; PART[id].meshes.push(im); parent.add(im); return im;
+}
+const _V = (x, y, z) => new THREE.Vector3(x, y, z);
+function flat(curve, n) { const pts = curve.getPoints(n), a = new Float32Array(pts.length * 3); pts.forEach((p, i) => { a[i * 3] = p.x; a[i * 3 + 1] = p.y; a[i * 3 + 2] = p.z; }); return a; }
+
+function buildDetails() {
+  const hexG = new THREE.CylinderGeometry(0.07, 0.07, 0.06, 6), injG = G.cylY(0.08, 0.354, 12).translate(0, 0.177, 0), VG = {};
+  BK.forEach(b => {
+    const si = -b, off = b * E.off, cg = bankW('cover', b, 2.5), cp = [];
+    for (let k = 0; k < 11; k++) { const z = -2.1 + k * 0.42 + off; cp.push([-0.78, 3.93, z], [0.78, 3.93, z]); }
+    inst(cg, hexG, MAT.steel, cp, 'bolt');
+    mk(G.cylY(0.2, 0.1, 20), MAT.cw, cg, 'cover', [0, 3.95, 1.7 + off]); mk(G.cylY(0.13, 0.05, 16), MAT.dark, cg, 'cover', [0, 4.02, 1.7 + off]);
+    const hg = bankW('head', b, 1.3), hp = [];
+    for (let k = 0; k < 10; k++) { const z = -2.2 + k * 0.49 + off; hp.push([-1.1, 3.19, z], [1.1, 3.19, z]); }
+    inst(hg, hexG, MAT.steel, hp, 'bolt');
+    VG[b] = bankW('valve', b, 2.0);
+    mk(G.cylZ(0.09, 4.5, 14), MAT.alt, VG[b], 'fuel', [si * 1.3, 3.1, off]);
+  });
+  const pw = wrap('pan', root, [0, -2.4, 0]);
+  for (let k = 0; k < 9; k++) mk(new THREE.BoxGeometry(2.5, 0.05, 0.09), MAT.iron, pw, 'pan', [0, -2.77, -2 + k * 0.5]);
+  mk(new THREE.CylinderGeometry(0.14, 0.14, 0.12, 6), MAT.steel, pw, 'pan', [0.8, -2.8, 1.3]);
+  /* kim phun + đường đi của hạt */
+  DYN.cyl.forEach((d, i) => {
+    const c = d.c, b = c.bank, si = -b, sgE = (c.pos % 2 === 0) ? 1 : -1, zi = d.z - sgE * 0.3, ze = d.z + sgE * 0.3;
+    d.idx = i; d.accA = d.accF = d.accE = d.accFl = 0; d.prevPh = 0;
+    const mat = M(0xffd24a, 0.3, 0.4, { emissive: 0x000000 }); d.injMat = mat;
+    const inj = grp(VG[b], si * 1.3, 3.1, zi), dx = -si * 0.25, dy = -0.25; inj.rotation.z = Math.atan2(-dx, dy);
+    mk(injG, mat, inj, 'fuel'); mk(G.cylY(0.12, 0.12, 12), MAT.dark, inj, 'fuel', [0, 0.05, 0]);
+    const R = (x, y, z) => { const r = toRoot(b, x, y); return _V(r[0], r[1], z); };
+    const seatI = R(si * 0.3, 2.36, zi);
+    d.seatI = seatI;
+    d.pathAir = flat(new THREE.CatmullRomCurve3([_V(0, 4.35, 0.2), _V(0, 3.4, 0.2 + (zi - 0.2) * 0.25), R(si * 1.25, 3.05, zi), R(si * 0.8, 2.6, zi), seatI]), 24);
+    d.pathFuel = flat(new THREE.CatmullRomCurve3([R(si * 1.05, 2.85, zi), R(si * 0.7, 2.58, zi), seatI]), 10);
+    d.pathExh = flat(new THREE.CatmullRomCurve3([R(-si * 0.3, 2.36, ze), R(-si * 1.05, 2.7, ze), _V(b * 2.5, 1.0, ze), _V(b * 3.15, 0.5, ze * 0.55), _V(b * 3.4, -0.8, ze * 0.15), _V(b * 3.4, -1.05, -0.6), _V(b * 3.4, -1.05, -2.2), _V(b * 3.4, -1.05, -4.2)]), 44);
+    const pr = toRoot(b, -si * 0.5, 2.31); d.plugPos = _V(pr[0], pr[1], d.z);
+  });
+  applyGrain();
+}
+
+/* ================= HỆ HẠT =================
+   Hạt khí nạp, xăng, lửa, khí xả chạy theo GÓC TRỤC KHUỶU nên luôn khớp piston và xupap dù đổi tốc độ mô phỏng.
+   Khói thoát ra từ ống xả chạy theo thời gian thực. Tất cả vẽ bằng điểm mềm, cường độ thấp để không che mô hình. */
+const PSV = 'attribute float aSize;attribute float aAlpha;attribute vec3 aColor;uniform float uScale;varying vec3 vC;varying float vA;' +
+  'void main(){vC=aColor;vA=aAlpha;vec4 mv=modelViewMatrix*vec4(position,1.);gl_PointSize=clamp(aSize*uScale/max(0.1,-mv.z),1.,48.);gl_Position=projectionMatrix*mv;}';
+const PSF = 'varying vec3 vC;varying float vA;void main(){float d=length(gl_PointCoord-vec2(.5));float a=smoothstep(.5,.06,d)*vA;if(a<.004)discard;gl_FragColor=vec4(vC,a);}';
+
+class Pool {
+  constructor(max, additive) {
+    const f = k => new Float32Array(max * k);
+    this.max = max; this.n = 0;
+    this.P = f(3); this.V = f(3); this.C = f(3); this.c0 = f(3); this.c1 = f(3);
+    this.S = f(1); this.A = f(1); this.age = f(1); this.life = f(1); this.real = f(1); this.s0 = f(1); this.s1 = f(1); this.a0 = f(1); this.ox = f(1); this.oz = f(1);
+    this.pid = new Int16Array(max);
+    this.geo = new THREE.BufferGeometry();
+    this.at = [new THREE.BufferAttribute(this.P, 3), new THREE.BufferAttribute(this.C, 3), new THREE.BufferAttribute(this.S, 1), new THREE.BufferAttribute(this.A, 1)];
+    this.geo.setAttribute('position', this.at[0]); this.geo.setAttribute('aColor', this.at[1]); this.geo.setAttribute('aSize', this.at[2]); this.geo.setAttribute('aAlpha', this.at[3]);
+    this.mat = new THREE.ShaderMaterial({ uniforms: { uScale: { value: 600 } }, vertexShader: PSV, fragmentShader: PSF, transparent: true, depthWrite: false, blending: additive ? THREE.AdditiveBlending : THREE.NormalBlending });
+    this.pts = new THREE.Points(this.geo, this.mat); this.pts.frustumCulled = false; this.pts.renderOrder = 10; root.add(this.pts);
+  }
+  add() { if (this.n >= this.max) return -1; const i = this.n++; this.age[i] = 0; this.real[i] = 0; return i; }
+  kill(i) {
+    const l = --this.n; if (i === l) return;
+    [this.P, this.V, this.C, this.c0, this.c1].forEach(a => { a[i * 3] = a[l * 3]; a[i * 3 + 1] = a[l * 3 + 1]; a[i * 3 + 2] = a[l * 3 + 2]; });
+    [this.S, this.A, this.age, this.life, this.real, this.s0, this.s1, this.a0, this.ox, this.oz, this.pid].forEach(a => { a[i] = a[l]; });
+  }
+  color(i, s) { const k = i * 3; for (let j = 0; j < 3; j++) this.C[k + j] = this.c0[k + j] + (this.c1[k + j] - this.c0[k + j]) * s; this.S[i] = this.s0[i] + (this.s1[i] - this.s0[i]) * s; }
+  flush() { this.geo.setDrawRange(0, this.n); this.at.forEach(a => { a.needsUpdate = true; }); }
+  clear() { this.n = 0; this.flush(); }
+}
+const PL = { air: new Pool(900, false), fuel: new Pool(700, true), fire: new Pool(900, true), exh: new Pool(900, true), smoke: new Pool(360, false) };
+let PD = 0.7, P_FUEL = true, P_SMOKE = true, PSI_LAST = 0, SMK = 0;
+const TAIL = { '-1': [-3.4, -1.05, -4.2], '1': [3.4, -1.05, -4.2] };
+const _o = [0, 0, 0];
+const rnd = Math.random;
+function pathPos(a, s, o) {
+  const n = a.length / 3 - 1, f = Math.min(0.9999, Math.max(0, s)) * n, k = f | 0, t = f - k;
+  o[0] = a[k * 3] + (a[k * 3 + 3] - a[k * 3]) * t; o[1] = a[k * 3 + 1] + (a[k * 3 + 4] - a[k * 3 + 1]) * t; o[2] = a[k * 3 + 2] + (a[k * 3 + 5] - a[k * 3 + 2]) * t;
+}
+function setP(p, i, life, pid, a, b) { p.life[i] = life; p.pid[i] = pid; }
+function jitter(p, i, m) { const k = i * 3; p.V[k] = (rnd() - 0.5) * m; p.V[k + 1] = (rnd() - 0.5) * m; p.V[k + 2] = (rnd() - 0.5) * m; }
+function col(p, i, a, b) { const k = i * 3; p.c0[k] = a[0]; p.c0[k + 1] = a[1]; p.c0[k + 2] = a[2]; p.c1[k] = b[0]; p.c1[k + 1] = b[1]; p.c1[k + 2] = b[2]; }
+
+function spawnAir(d) {
+  const p = PL.air, i = p.add(); if (i < 0) return;
+  p.life[i] = 150; p.pid[i] = d.idx; p.ox[i] = (rnd() - 0.5) * 0.8; p.oz[i] = (rnd() - 0.5) * 0.8; jitter(p, i, 0.16);
+  col(p, i, [0.30, 0.62, 1.0], [0.5, 0.78, 1.0]); p.s0[i] = 0.30; p.s1[i] = 0.40; p.a0[i] = 0.20;
+}
+function spawnFuel(d) {
+  const p = PL.fuel, i = p.add(); if (i < 0) return;
+  p.life[i] = 100; p.pid[i] = d.idx; p.ox[i] = (rnd() - 0.5) * 0.7; p.oz[i] = (rnd() - 0.5) * 0.7; jitter(p, i, 0.1);
+  col(p, i, [1.0, 0.9, 0.48], [1.0, 0.56, 0.12]); p.s0[i] = 0.095; p.s1[i] = 0.035; p.a0[i] = 0.62;
+}
+function spawnExh(d, hot) {
+  const p = PL.exh, i = p.add(); if (i < 0) return;
+  p.life[i] = 260; p.pid[i] = d.idx; jitter(p, i, 0.1);
+  col(p, i, hot ? [1.0, 0.55, 0.14] : [0.6, 0.7, 0.9], hot ? [0.5, 0.16, 0.08] : [0.35, 0.4, 0.5]); p.s0[i] = 0.32; p.s1[i] = 0.14; p.a0[i] = hot ? 0.32 : 0.16;
+}
+function spawnSpark(d) {
+  const p = PL.fire;
+  for (let n = 0; n < 18; n++) {
+    const i = p.add(); if (i < 0) return; const k = i * 3, sp = 0.025 + rnd() * 0.045, th = rnd() * TAU, ph = Math.acos(2 * rnd() - 1);
+    p.P[k] = d.plugPos.x; p.P[k + 1] = d.plugPos.y; p.P[k + 2] = d.plugPos.z;
+    p.V[k] = sp * Math.sin(ph) * Math.cos(th); p.V[k + 1] = sp * Math.cos(ph); p.V[k + 2] = sp * Math.sin(ph) * Math.sin(th);
+    p.life[i] = 34 + rnd() * 30; p.pid[i] = 1; col(p, i, [1.0, 0.99, 0.86], [1.0, 0.34, 0.055]); p.s0[i] = 0.19; p.s1[i] = 0.035; p.a0[i] = 1;
+  }
+}
+function spawnFlame(d, cy, h) {
+  const p = PL.fire, i = p.add(); if (i < 0) return; const k = i * 3, r = Math.sqrt(rnd()) * 0.42, th = rnd() * TAU;
+  const q = toRoot(d.c.bank, r * Math.cos(th), cy + rnd() * Math.max(0.05, h));
+  p.P[k] = q[0]; p.P[k + 1] = q[1]; p.P[k + 2] = d.z + r * Math.sin(th);
+  p.V[k] = (rnd() - 0.5) * 0.008; p.V[k + 1] = (rnd() - 0.5) * 0.008; p.V[k + 2] = (rnd() - 0.5) * 0.008;
+  p.life[i] = 36; p.pid[i] = 0; col(p, i, [1.0, 0.7, 0.2], [0.8, 0.15, 0.05]); p.s0[i] = 0.3; p.s1[i] = 0.5; p.a0[i] = 0.3;
+}
+function spawnSmoke(b) {
+  const p = PL.smoke, i = p.add(); if (i < 0) return; const k = i * 3, t = TAIL[b], fl = 0.5 + S.rpm / 5000, cold = S.coolant < 55;
+  p.P[k] = t[0] + (rnd() - 0.5) * 0.12; p.P[k + 1] = t[1] + (rnd() - 0.5) * 0.12; p.P[k + 2] = t[2];
+  p.V[k] = b * (rnd() - 0.35) * 0.34; p.V[k + 1] = 0.12 + rnd() * 0.24; p.V[k + 2] = -(0.65 + 1.0 * fl * rnd());
+  p.life[i] = 2.2 + rnd() * 0.8; p.age[i] = 0;
+  const g = cold ? 0.78 : 0.52 - 0.22 * S.thrEff; col(p, i, [g * 1.04, g, g * 0.94], [g * 0.72, g * 0.73, g * 0.76]); p.s0[i] = 0.48; p.s1[i] = 2.15 + 0.55 * S.thrEff; p.a0[i] = cold ? 0.22 : 0.17;
+}
+
+function updIntake(p, key, split, dps, rdt) {
+  for (let i = p.n - 1; i >= 0; i--) {
+    p.age[i] += dps; p.real[i] += rdt;
+    const s = p.age[i] / p.life[i];
+    if (s >= 1 || p.real[i] > 12) { p.kill(i); continue; }
+    const d = DYN.cyl[p.pid[i]], k = i * 3;
+    if (s < split) pathPos(d[key], s / split, _o);
+    else {
+      const e = smooth01((s - split) / (1 - split)), sd = d.seatI, ox = p.ox[i], oz = p.oz[i];
+      _o[0] = sd.x + (d.tx + ox * d.ca - sd.x) * e; _o[1] = sd.y + (d.ty - ox * d.sa - sd.y) * e; _o[2] = sd.z + (d.tz + oz - sd.z) * e;
+    }
+    p.P[k] = _o[0] + p.V[k]; p.P[k + 1] = _o[1] + p.V[k + 1]; p.P[k + 2] = _o[2] + p.V[k + 2];
+    p.color(i, s); p.A[i] = p.a0[i] * Math.min(1, s / 0.1) * Math.min(1, (1 - s) / 0.25);
+  }
+}
+function updExh(p, dps, rdt) {
+  for (let i = p.n - 1; i >= 0; i--) {
+    p.age[i] += dps; p.real[i] += rdt;
+    const s = p.age[i] / p.life[i];
+    if (s >= 1 || p.real[i] > 12) { if (s >= 1 && P_SMOKE && SMK >= 1) { SMK--; spawnSmoke(DYN.cyl[p.pid[i]].c.bank); } p.kill(i); continue; }
+    const d = DYN.cyl[p.pid[i]], k = i * 3; pathPos(d.pathExh, s, _o);
+    p.P[k] = _o[0] + p.V[k] * (0.4 + s); p.P[k + 1] = _o[1] + p.V[k + 1] * (0.4 + s); p.P[k + 2] = _o[2] + p.V[k + 2] * (0.4 + s);
+    p.color(i, Math.min(1, s * 1.4)); p.A[i] = p.a0[i] * Math.min(1, s / 0.06) * Math.min(1, (1 - s) / 0.3);
+  }
+}
+function updFire(p, dps, rdt) {
+  for (let i = p.n - 1; i >= 0; i--) {
+    p.age[i] += dps; p.real[i] += rdt;
+    const s = p.age[i] / p.life[i];
+    if (s >= 1 || p.real[i] > 6) { p.kill(i); continue; }
+    const k = i * 3; p.P[k] += p.V[k] * dps; p.P[k + 1] += p.V[k + 1] * dps; p.P[k + 2] += p.V[k + 2] * dps;
+    p.color(i, s); p.A[i] = p.a0[i] * (p.pid[i] === 1 ? 1 - s : Math.sin(Math.PI * Math.min(1, s)));
+  }
+}
+function updSmoke(p, rdt) {
+  for (let i = p.n - 1; i >= 0; i--) {
+    p.age[i] += rdt;
+    const s = p.age[i] / p.life[i];
+    if (s >= 1) { p.kill(i); continue; }
+    const k = i * 3, dr = Math.max(0, 1 - 0.8 * rdt);
+    p.V[k] *= dr; p.V[k + 1] = p.V[k + 1] * dr + 0.15 * rdt; p.V[k + 2] *= dr;
+    p.P[k] += p.V[k] * rdt; p.P[k + 1] += p.V[k + 1] * rdt; p.P[k + 2] += p.V[k + 2] * rdt;
+    p.color(i, s); p.A[i] = p.a0[i] * Math.min(1, s / 0.08) * (1 - s);
+  }
+}
+
+function updateParticles(rdt) {
+  const TWO = 4 * Math.PI;
+  let dps = (((S.psi - PSI_LAST) % TWO) + TWO) % TWO * R2D; PSI_LAST = S.psi; if (dps > 90) dps = 90;
+  const deg = S.psi * R2D, fuelOn = S.ignSwitch && !S.fuelCut && S.rpm > 30, thr = S.thrEff || 0;
+  SMK = Math.min(4, SMK + rdt * (24 + 34 * thr) * PD);
+  PL.air.pts.visible = PL.fuel.pts.visible = P_FUEL; PL.exh.pts.visible = PL.smoke.pts.visible = P_SMOKE; PL.fire.pts.visible = FLAME;
+  if (!P_FUEL) { PL.air.n = 0; PL.fuel.n = 0; } if (!P_SMOKE) { PL.exh.n = 0; PL.smoke.n = 0; } if (!FLAME) PL.fire.n = 0;
+  DYN.cyl.forEach(d => {
+    const c = d.c; let ph = (deg - c.fire) % 720; if (ph < 0) ph += 720;
+    const a = c.alpha * DEG; d.ca = Math.cos(a); d.sa = Math.sin(a);
+    d.tx = d.pg.position.x + d.sa * 0.42; d.ty = d.pg.position.y + d.ca * 0.42; d.tz = d.pg.position.z;
+    const li = valveLift(ph, true) * U, le = valveLift(ph, false) * U, inj = (li > 0.012 && fuelOn) ? 1 : 0;
+    d.injMat.emissive.setRGB(0.9 * inj, 0.55 * inj, 0.08 * inj);
+    if (dps > 0) {
+      if (P_FUEL && li > 0.012) {
+        d.accA += dps * 0.3 * PD * (0.55 + 0.7 * thr); while (d.accA >= 1 && d.accA-- > 0) spawnAir(d);
+        if (fuelOn) { d.accF += dps * 0.36 * PD * (0.6 + 0.4 * thr); while (d.accF >= 1 && d.accF-- > 0) spawnFuel(d); }
+      }
+      if (P_SMOKE && le > 0.012) { d.accE += dps * 0.17 * PD; while (d.accE >= 1 && d.accE-- > 0) spawnExh(d, ENV.ign); }
+      if (FLAME && ENV.ign) {
+        const A = (720 - S.adv) % 720, rel = (A - d.prevPh + 720) % 720, delta = (ph - d.prevPh + 720) % 720;
+        if (delta < 200 && rel > 0 && rel <= delta) spawnSpark(d);
+        const f = burnFrac(ph);
+        if (f > 0.02 && f < 0.99 && (ph >= 720 - S.adv || ph < PH.EVO)) {
+          kin(ph * DEG, _k2); const crown = _k2.s * U + 0.4, h = Math.max(0.05, 2.32 - crown);
+          d.accFl += dps * 0.72 * PD; while (d.accFl >= 1 && d.accFl-- > 0) spawnFlame(d, crown, h);
+        }
+      }
+    }
+    d.prevPh = ph;
+  });
+  updIntake(PL.air, 'pathAir', 0.62, dps, rdt); updIntake(PL.fuel, 'pathFuel', 0.55, dps, rdt);
+  updExh(PL.exh, dps, rdt); updFire(PL.fire, dps, rdt); updSmoke(PL.smoke, rdt);
+  Object.keys(PL).forEach(k => PL[k].flush());
+}
+function setParticleScale() {
+  const v = canvas.height / (2 * Math.tan(camera.fov * Math.PI / 360));
+  Object.keys(PL).forEach(k => { PL[k].mat.uniforms.uScale.value = v; });
+}
+
+/* ================= DỰNG MÔ HÌNH, GIAO DIỆN, VÒNG LẶP ================= */
+buildCrank(); buildCam(); buildBlock(); buildHeads(); buildIntake(); buildExhaust(); buildCylinders(); buildDetails();
+root.position.y = -1.0;
+
+/* trạng thái ban đầu: máy đang nổ cầm chừng để thấy mô hình chuyển động ngay */
+S.ignSwitch = true; S.w = 800 * TAU / 60; S.thr = 0; S.timeScale = 0.1;
+
+/* ---------- camera ---------- */
+cam.theta = CAMS.iso[0]; cam.phi = CAMS.iso[1]; cam.dist = CAMS.iso[2]; cam.target.set(0, 0.5, 0);
+Object.keys(CAMS).forEach(k => CAMS[k][3] = [0, 0.5, 0]);
+$$('.fab').forEach(b => b.addEventListener('click', () => goCam(b.dataset.cam)));
+function updateCamTween(dt) {
+  const tw = cam.tween; if (!tw) return;
+  tw.t = Math.min(1, tw.t + dt / 0.7); const e = tw.t * tw.t * (3 - 2 * tw.t);
+  cam.theta = tw.from[0] + (tw.to[0] - tw.from[0]) * e; cam.phi = tw.from[1] + (tw.to[1] - tw.from[1]) * e;
+  cam.dist = tw.from[2] + (tw.to[2] - tw.from[2]) * e;
+  cam.target.set(tw.from[3].x + (tw.to[3][0] - tw.from[3].x) * e, tw.from[3].y + (tw.to[3][1] - tw.from[3].y) * e, tw.from[3].z + (tw.to[3][2] - tw.from[3].z) * e);
+  if (tw.t >= 1) cam.tween = null;
+}
+
+/* ---------- tab, bottom sheet ---------- */
+$$('.tab').forEach(t => t.addEventListener('click', () => {
+  $$('.tab').forEach(x => x.setAttribute('aria-selected', x === t));
+  $$('.panel').forEach(p => p.classList.toggle('on', p.id === t.dataset.p));
+  if ($('#sheet').classList.contains('min')) $('#sheet').classList.remove('min');
+}));
+(function () {
+  const sh = $('#sheet'), gr = $('#grab'); let y0 = null;
+  gr.addEventListener('pointerdown', e => { y0 = e.clientY; gr.setPointerCapture(e.pointerId); });
+  gr.addEventListener('pointerup', e => {
+    if (y0 === null) return; const dy = e.clientY - y0; y0 = null;
+    const st = sh.classList.contains('min') ? 0 : sh.classList.contains('max') ? 2 : 1;
+    let n = st; if (dy < -24) n = Math.min(2, st + 1); else if (dy > 24) n = Math.max(0, st - 1); else n = (st + 1) % 3;
+    sh.classList.toggle('min', n === 0); sh.classList.toggle('max', n === 2);
+  });
+})();
+
+/* ---------- điều khiển ---------- */
+let startTimer = null;
+function paintRange(el) { el.style.setProperty('--v', ((el.value - el.min) / (el.max - el.min) * 100) + '%'); }
+$$('input[type=range]').forEach(el => { paintRange(el); el.addEventListener('input', () => paintRange(el)); });
+$('#rThr').addEventListener('input', e => { S.thr = e.target.value / 100; $('#vThr').textContent = e.target.value + '%'; });
+$('#rLoad').addEventListener('input', e => { S.load = e.target.value / 100; $('#vLoad').textContent = e.target.value + '%'; });
+$('#bIgn').addEventListener('click', e => { S.ignSwitch = !S.ignSwitch; if (!S.ignSwitch) { S.starter = false; clearTimeout(startTimer); } syncBtns(); });
+function doStart() { S.ignSwitch = true; S.starter = true; syncBtns(); clearTimeout(startTimer); startTimer = setTimeout(() => { S.starter = false; syncBtns(); }, 4000); }
+$('#bStart').addEventListener('click', doStart); $('#bFab').addEventListener('click', doStart);
+function syncBtns() {
+  $('#bIgn').setAttribute('aria-pressed', S.ignSwitch); $('#bIgn').textContent = S.ignSwitch ? 'Điện: Bật' : 'Điện: Tắt';
+  $('#bStart').textContent = $('#bFab').textContent = S.starter ? 'Đang đề…' : (S.rpm > 300 && S.ignSwitch ? 'Đề lại' : 'Đề máy');
+}
+syncBtns();
+$$('#segTime button').forEach(b => b.addEventListener('click', () => {
+  S.timeScale = +b.dataset.t; $$('#segTime button').forEach(x => x.setAttribute('aria-pressed', x === b));
+}));
+const fo = $('#fo'); [1, 8, 4, 3, 6, 5, 7, 2].forEach(n => { const i = document.createElement('i'); i.textContent = n; i.dataset.n = n; fo.appendChild(i); });
+
+/* ---------- hiển thị: chip danh mục, tách rời, mặt cắt, độ trong ---------- */
+const CATS = [['block', 'Khối máy', '#5d86b3'], ['crank', 'Trục khuỷu', '#e3a72f'], ['piston', 'Piston, tay biên', '#6aa6ee'], ['cam', 'Trục cam, xích', '#49c27a'], ['valve', 'Xupap, cò mổ', '#23b7f2'], ['head', 'Nắp máy', '#7da3cf'], ['cover', 'Nắp cò mổ', '#c0392b'], ['intake', 'Cổ hút', '#4aa8e0'], ['exhaust', 'Cổ xả', '#a0522d'], ['ign', 'Đánh lửa', '#f7f4ec'], ['pan', 'Cácte', '#5d7390'], ['fly', 'Bánh đà, puly', '#7e8da0']];
+CATS.forEach(([k, n, col]) => {
+  const b = document.createElement('button'); b.className = 'chip'; b.setAttribute('aria-pressed', 'true');
+  const dot = document.createElement('i'); dot.className = 'dot'; dot.style.background = col; b.appendChild(dot); b.appendChild(document.createTextNode(n));
+  b.dataset.k = k;
+  b.addEventListener('click', () => { const on = b.getAttribute('aria-pressed') !== 'true'; b.setAttribute('aria-pressed', on); (WRAP[k] || []).forEach(g => g.visible = on); $$('#segView button').forEach(x => x.setAttribute('aria-pressed', 'false')); });
+  $('#chips').appendChild(b);
+});
+let EXP = 0;
+$('#rEx').addEventListener('input', e => { EXP = e.target.value / 100; $('#vEx').textContent = e.target.value + '%'; applyExplode(); });
+function applyExplode() { Object.keys(WRAP).forEach(k => WRAP[k].forEach(g => { const v = g.userData.ex || [0, 0, 0]; g.position.set(v[0] * EXP * 1.0, v[1] * EXP, v[2] * EXP); })); }
+$('#rCut').addEventListener('input', e => {
+  const v = +e.target.value; clipPlane.constant = v === 0 ? 99 : 3.6 - v / 100 * 7.2;
+  $('#vCut').textContent = v === 0 ? 'Tắt' : 'z ' + clipPlane.constant.toFixed(1);
+});
+function applyAlpha() {
+  const k = $('#rAlpha').value / 22; $('#vAlpha').textContent = $('#rAlpha').value + '%';
+  shellMats.forEach(m => { if (m.userData.baseOp !== undefined) { m.opacity = Math.min(1, m.userData.baseOp * k); m.depthWrite = m.opacity > 0.85; m.needsUpdate = true; } else m.opacity = Math.min(0.6, 0.35 * Math.min(1.5, k)); });
+}
+$('#rAlpha').addEventListener('input', applyAlpha); applyAlpha();
+$('#swGas').addEventListener('change', e => (WRAP.gas || []).forEach(g => g.visible = e.target.checked));
+$('#swFlame').addEventListener('change', e => { FLAME = e.target.checked; });
+$('#swFuel').addEventListener('change', e => { P_FUEL = e.target.checked; });
+$('#swSmoke').addEventListener('change', e => { P_SMOKE = e.target.checked; });
+$('#swGrain').addEventListener('change', e => setGrain(e.target.checked));
+$('#rDens').addEventListener('input', e => { PD = e.target.value / 100; $('#vDens').textContent = e.target.value + '%'; });
+
+/* chế độ xem có sẵn: mặc định ẩn bớt vỏ ngoài để thấy phần chuyển động bên trong */
+const VIEWS = {
+  core: { on: ['block', 'crank', 'piston', 'cam', 'valve', 'head', 'fly'], a: 14 },
+  all: { on: CATS.map(c => c[0]), a: 22 },
+  valve: { on: ['cam', 'valve', 'head', 'cover'], a: 16 },
+  crank: { on: ['block', 'crank', 'piston', 'fly', 'pan'], a: 12 }
+};
+function setView(k) {
+  const v = VIEWS[k]; if (!v) return;
+  $$('#chips .chip').forEach(c => { const on = v.on.indexOf(c.dataset.k) >= 0; c.setAttribute('aria-pressed', on); (WRAP[c.dataset.k] || []).forEach(g => g.visible = on); });
+  $('#rAlpha').value = v.a; paintRange($('#rAlpha')); applyAlpha();
+  $$('#segView button').forEach(b => b.setAttribute('aria-pressed', b.dataset.v === k));
+}
+$$('#segView button').forEach(b => b.addEventListener('click', () => setView(b.dataset.v)));
+
+/* ---------- chạm chọn chi tiết ---------- */
+const ray = new THREE.Raycaster(), HI = new THREE.MeshStandardMaterial({ color: 0xffa24a, emissive: 0xff6a00, emissiveIntensity: 0.55, metalness: 0.3, roughness: 0.4, clippingPlanes: [clipPlane] });
+const SHELLS = ['block', 'head', 'cover', 'intake', 'pan', 'liner'];
+let hiPart = null;
+function isVis(o) { while (o) { if (!o.visible) return false; o = o.parent; } return true; }
+function setHi(id) {
+  if (hiPart) PART[hiPart].meshes.forEach(m => { if (m.userData.orig) { m.material = m.userData.orig; m.userData.orig = null; } });
+  hiPart = id;
+  if (id) PART[id].meshes.forEach(m => { if (!m.userData.orig) m.userData.orig = m.material; m.material = HI; });
+}
+function pickAt(cx, cy) {
+  const r = canvas.getBoundingClientRect();
+  ray.setFromCamera(new THREE.Vector2(((cx - r.left) / r.width) * 2 - 1, -((cy - r.top) / r.height) * 2 + 1), camera);
+  const list = []; Object.keys(PART).forEach(k => PART[k].meshes.forEach(m => { if (isVis(m)) list.push(m); }));
+  const hits = ray.intersectObjects(list, false);
+  let h = hits.find(x => SHELLS.indexOf(x.object.userData.part) < 0) || hits[0];
+  if (!h) { setHi(null); $('#pick').classList.remove('on'); return; }
+  const id = h.object.userData.part; setHi(id);
+  $('#pickT').textContent = PART[id].name; $('#pickD').textContent = PART[id].desc; $('#pick').classList.add('on');
+}
+$('#pickX').addEventListener('click', () => { setHi(null); $('#pick').classList.remove('on'); });
+
+/* ---------- âm thanh tổng hợp ---------- */
+let AC = null, SND = null;
+function initSound() {
+  AC = new (window.AudioContext || window.webkitAudioContext)();
+  const g = AC.createGain(), lp = AC.createBiquadFilter(); lp.type = 'lowpass'; lp.Q.value = 2; g.gain.value = 0;
+  const mk2 = (t, m) => { const o = AC.createOscillator(); o.type = t; const og = AC.createGain(); og.gain.value = m; o.connect(og); og.connect(lp); o.start(); return o; };
+  SND = { g, lp, o1: mk2('sawtooth', 0.5), o2: mk2('square', 0.22), o3: mk2('triangle', 0.7), o4: mk2('sawtooth', 0.18) };
+  lp.connect(g); g.connect(AC.destination);
+}
+$('#bSound').addEventListener('click', e => {
+  const b = e.currentTarget, on = b.getAttribute('aria-pressed') !== 'true'; b.setAttribute('aria-pressed', on);
+  try { if (on && !AC) initSound(); if (AC) on ? AC.resume() : AC.suspend(); } catch (err) { b.setAttribute('aria-pressed', 'false'); }
+});
+function updateSound() {
+  if (!SND || AC.state !== 'running') return;
+  const t = AC.currentTime, f = Math.max(2, S.rpm / 60 * 4), run = S.rpm > 60 ? 1 : 0;
+  SND.o1.frequency.setTargetAtTime(f, t, 0.03); SND.o2.frequency.setTargetAtTime(f * 2, t, 0.03);
+  SND.o3.frequency.setTargetAtTime(f * 0.5, t, 0.03); SND.o4.frequency.setTargetAtTime(f * 1.5 + 3, t, 0.03);
+  SND.lp.frequency.setTargetAtTime(260 + S.rpm * 0.55 + S.thrEff * 700, t, 0.05);
+  const amp = ENV.ign ? 0.05 + 0.12 * S.thrEff + 0.06 * S.load : 0.025;
+  SND.g.gain.setTargetAtTime(run * amp, t, 0.05);
+}
+$('#bAuto').addEventListener('click', e => { cam.auto = !cam.auto; e.currentTarget.setAttribute('aria-pressed', cam.auto); });
+
+/* ---------- đồ thị ---------- */
+let SEL = 0;
+CYL.slice().sort((a, b) => a.n - b.n).forEach(c => {
+  const b = document.createElement('button'); b.className = 'chip'; b.textContent = 'Xi-lanh ' + c.n; b.setAttribute('aria-pressed', c.n === 1);
+  b.addEventListener('click', () => { SEL = c.n - 1; $$('#cylChips .chip').forEach(x => x.setAttribute('aria-pressed', x === b)); });
+  $('#cylChips').appendChild(b);
+});
+function prep(cv) {
+  const r = cv.getBoundingClientRect(); if (!r.width) return null; const d = Math.min(2, window.devicePixelRatio || 1);
+  if (cv.width !== Math.round(r.width * d)) { cv.width = Math.round(r.width * d); cv.height = Math.round(r.height * d); }
+  const g = cv.getContext('2d'); g.setTransform(d, 0, 0, d, 0, 0); g.clearRect(0, 0, r.width, r.height);
+  const cs = getComputedStyle(document.documentElement);
+  return { g, w: r.width, h: r.height, fg: cs.getPropertyValue('--on-surface-v').trim(), grid: cs.getPropertyValue('--outline-v').trim(), a: cs.getPropertyValue('--primary').trim(), b: cs.getPropertyValue('--intake').trim(), c: cs.getPropertyValue('--exhaust').trim() };
+}
+function chart(cv, x0, x1, y0, y1, xt, yt, series, dot, fmtY) {
+  const o = prep(cv); if (!o) return; const { g, w, h } = o, L = 38, R = 10, T = 10, B = 22;
+  const X = x => L + (x - x0) / (x1 - x0) * (w - L - R), Y = y => T + (1 - (y - y0) / (y1 - y0)) * (h - T - B);
+  g.font = '10px Roboto Mono, monospace'; g.lineWidth = 1; g.strokeStyle = o.grid; g.fillStyle = o.fg;
+  g.textAlign = 'right'; yt.forEach(v => { g.beginPath(); g.moveTo(L, Y(v)); g.lineTo(w - R, Y(v)); g.stroke(); g.fillText(fmtY ? fmtY(v) : v, L - 4, Y(v) + 3); });
+  g.textAlign = 'center'; xt.forEach(v => { g.beginPath(); g.moveTo(X(v), T); g.lineTo(X(v), h - B); g.stroke(); g.fillText(v, X(v), h - 7); });
+  series.forEach(s => { g.strokeStyle = o[s.c]; g.lineWidth = 2; g.beginPath(); s.p.forEach((q, i) => i ? g.lineTo(X(q[0]), Y(q[1])) : g.moveTo(X(q[0]), Y(q[1]))); g.stroke(); });
+  if (dot) { g.fillStyle = o.a; g.beginPath(); g.arc(X(dot[0]), Y(dot[1]), 4.5, 0, TAU); g.fill(); }
+}
+function drawCharts() {
+  const c = CYL[SEL], deg = S.psi * R2D; let ph = (deg - c.fire) % 720; if (ph < 0) ph += 720;
+  const pv = []; let pm = 0;
+  for (let p = 0; p <= 720; p += 3) { const V = volOfPhase(p), P = gasP(p, V) / 1e5; pv.push([V * 1000, P]); if (P > pm) pm = P; }
+  const ymax = Math.max(10, Math.ceil(pm / 10) * 10);
+  chart($('#cPV'), 0, 0.8, 0, ymax, [0, 0.2, 0.4, 0.6, 0.8], [0, ymax / 2, ymax], [{ p: pv, c: 'a' }], [volOfPhase(ph) * 1000, gasP(ph, volOfPhase(ph)) / 1e5]);
+  $('#capPV').textContent = 'Xi-lanh ' + c.n + ': trục hoành là thể tích (lít), trục tung là áp suất (bar). Đỉnh áp ' + pm.toFixed(0) + ' bar.';
+  const tq = [], k = { s: 0, sp: 0, spp: 0 }; let lo = 0, hi = 0;
+  const tauAt = psiDeg => { let t = 0; for (let i = 0; i < 8; i++) { let q = (psiDeg - CYL[i].fire) % 720; if (q < 0) q += 720; kin(q * DEG, k); t += -(gasP(q, PH.Vc + PH.A * (PH.sTop - k.s)) - PH.Pcase) * PH.A * k.sp; } return t; };
+  for (let p = 0; p <= 720; p += 4) { const t = tauAt(p); tq.push([p, t]); lo = Math.min(lo, t); hi = Math.max(hi, t); }
+  const yl = Math.floor(lo / 200) * 200, yh = Math.max(200, Math.ceil(hi / 200) * 200), yt = []; for (let v = yl; v <= yh; v += 200) yt.push(v);
+  chart($('#cTq'), 0, 720, yl, yh, [0, 180, 360, 540, 720], yt, [{ p: tq, c: 'c' }], [deg, tauAt(deg)]);
+  const vi = [], ve = [];
+  for (let p = 0; p <= 720; p += 3) { vi.push([p, valveLift(p, true) * 1000]); ve.push([p, valveLift(p, false) * 1000]); }
+  chart($('#cVal'), 0, 720, 0, 14, [0, 180, 360, 540, 720], [0, 5, 10], [{ p: vi, c: 'b' }, { p: ve, c: 'c' }], [ph, valveLift(ph, true) * 1000 + valveLift(ph, false) * 1000], v => v + 'mm');
+}
+
+/* ---------- vòng lặp chính ---------- */
+let last = performance.now(), uiT = 0, chT = 0, soundT = 0, scaleT = 0, pageActive = !document.hidden, frameQueued = false;
+document.addEventListener('visibilitychange', () => {
+  pageActive = !document.hidden; last = performance.now();
+  if (pageActive && !frameQueued) { frameQueued = true; requestAnimationFrame(frame); }
+});
+const MPS = 2 * PH.r * 2;
+function frame(now) {
+  frameQueued = false;
+  if (!pageActive) return;
+  frameQueued = true; requestAnimationFrame(frame);
+  const rdt = Math.min(1 / 30, Math.max(0, (now - last) / 1000)); last = now;
+  advance(rdt * S.timeScale, rdt);
+  updateModel(); updateParticles(rdt); updateCamTween(rdt);
+  scaleT += rdt; if (scaleT > 0.25) { scaleT = 0; setParticleScale(); }
+  if (cam.auto && ptrs.size === 0 && !cam.tween) cam.theta += rdt * 0.35;
+  applyCam(); renderer.render(scene, camera);
+  soundT += rdt; if (soundT > 0.05) { soundT = 0; updateSound(); }
+  uiT += rdt; chT += rdt;
+  if (uiT > 0.1) {
+    uiT = 0;
+    $('#hRpm').textContent = Math.round(S.rpm);
+    $('#hKw').textContent = Math.round(S.power);
+    $('#stRpm').classList.toggle('warn', S.fuelCut);
+    const st = S.starter ? 'Đang đề' : S.fuelCut ? 'Ngắt nhiên liệu' : S.rpm < 30 ? (S.ignSwitch ? 'Chờ đề máy' : 'Tắt máy') : S.running ? (S.rpm < 1000 && S.thr < 0.03 ? 'Cầm chừng' : 'Đang chạy') : 'Đang quay';
+    $('#sub').textContent = st + ' · ' + Math.round(S.rpm) + ' vòng/phút';
+    $('#gTq').textContent = Math.round(S.tauOut); $('#gHp').textContent = Math.round(S.power * 1.341);
+    $('#gMap').textContent = Math.round(S.map / 1000); $('#gTemp').textContent = Math.round(S.coolant);
+    $('#gOil').textContent = S.oilP.toFixed(1); $('#gVp').textContent = (MPS * S.rpm / 60).toFixed(1);
+    $('#gTemp').parentElement.classList.toggle('alert', S.coolant > 105); $('#gOil').parentElement.classList.toggle('alert', S.rpm > 700 && S.oilP < 1.0);
+    $('#gEgt').textContent = Math.round(ENV.ign ? 420 + Math.min(430, S.power * 2.4 + S.load * 120) : 25);
+    $('#gThr').textContent = Math.round((S.thrEff || 0) * 100);
+    $('#gAdv').textContent = ENV.ign ? Math.round(S.adv) : 0; $('#gAng').textContent = Math.round((S.psi * R2D) % 720);
+    const deg = S.psi * R2D;
+    $$('#fo i').forEach(i => { const c = CYL[i.dataset.n - 1]; let ph = (deg - c.fire) % 720; if (ph < 0) ph += 720; i.classList.toggle('on', ENV.ign && ph < 90); });
+    syncBtns();
+    if (S.running !== S.wasRun) { S.wasRun = S.running; }
+    oilScale();
+  }
+  if (chT > 0.20 && $('#pChart').classList.contains('on') && !$('#sheet').classList.contains('min')) { chT = 0; drawCharts(); }
+}
+function oilScale() { if (DYN.oil) DYN.oil.material.opacity = 0.35 + 0.1 * Math.sin(S.psi * 0.1); }
+setView('core');
+resize(); applyCam(); if (pageActive && !frameQueued) { frameQueued = true; requestAnimationFrame(frame); }
+
+</script>
+
+</body></html>
