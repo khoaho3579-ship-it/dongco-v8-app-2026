@@ -1,0 +1,12 @@
+{
+  "appId": "com.v8engine.realisticfx",
+  "appName": "Động cơ V8 5.7L",
+  "webDir": "www",
+  "server": {
+    "androidScheme": "https"
+  },
+  "android": {
+    "allowMixedContent": false,
+    "webContentsDebuggingEnabled": false
+  }
+}
